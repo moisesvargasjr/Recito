@@ -49,10 +49,15 @@ final class SpeechAnalyzerSource: SpeechSource {
         stop()
 
         let locale = Locale(identifier: localeIdentifier)
+        // `.fastResults` biases the transcriber toward responsiveness (faster,
+        // slightly less accurate volatile guesses) — paired with `.volatileResults`
+        // this is Apple's documented config for the lowest-latency live output,
+        // which is what voice-follow needs. Accuracy of the *volatile* words
+        // doesn't matter to us: positions re-confirm as finals arrive.
         let transcriber = SpeechTranscriber(
             locale: locale,
             transcriptionOptions: [],
-            reportingOptions: [.volatileResults],
+            reportingOptions: [.volatileResults, .fastResults],
             attributeOptions: []
         )
         self.transcriber = transcriber
@@ -68,7 +73,21 @@ final class SpeechAnalyzerSource: SpeechSource {
             throw error
         }
 
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        // iOS 27 adds `ignoresResourceLimits`, which lets the analyzer bypass the
+        // resource throttling that otherwise makes it buffer/batch audio under
+        // load — the likely cause of the ~1–2s tracking lag. Worth the extra
+        // compute for a live talk; revert this branch if it costs too much battery.
+        let analyzer: SpeechAnalyzer
+        if #available(iOS 27.0, *) {
+            let options = SpeechAnalyzer.Options(
+                priority: .userInitiated,
+                modelRetention: .whileInUse,
+                ignoresResourceLimits: true
+            )
+            analyzer = SpeechAnalyzer(modules: [transcriber], options: options)
+        } else {
+            analyzer = SpeechAnalyzer(modules: [transcriber])
+        }
         self.analyzer = analyzer
         analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
 

@@ -69,6 +69,18 @@ struct TextDisplaySheet: View {
                 } footer: {
                     Text("These are the future home of accessibility fonts + themes — surfaced behind the Aa control on every screen.")
                 }
+
+                #if DEBUG
+                Section {
+                    Toggle(isOn: $settings.showVoiceDebug) {
+                        labeled("Voice debug overlay", "live recognized words, predictor lead, and pace while voice-follow runs")
+                    }
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Debug builds only — not present in release.")
+                }
+                #endif
             }
             .navigationTitle("Text & Display")
             .navigationBarTitleDisplayMode(.inline)

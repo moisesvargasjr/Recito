@@ -23,10 +23,14 @@ struct ReaderChrome: View {
     let onSizeUp: () -> Void
     var onPaceTap: (() -> Void)? = nil
 
-    // Voice-follow (only offered when available, in script mode).
+    // Voice-follow (only offered when available, in script mode). When set, the
+    // Auto/Voice switch appears and the play button drives the active mode.
     var voiceAvailable: Bool = false
-    var voiceActive: Bool = false
-    var onToggleVoice: () -> Void = {}
+    /// Running state of the active follow mode, for the play/pause icon. Falls
+    /// back to `vm.isPlaying` when not supplied (outline reader).
+    var isRunning: Bool? = nil
+    /// Mode-aware play/pause handler. Falls back to `vm.togglePlay()`.
+    var onTogglePlay: (() -> Void)? = nil
 
     /// Optional top-right accessory (the scripture cue chip, wired in Stage 9).
     var topTrailing: AnyView? = nil
@@ -54,7 +58,7 @@ struct ReaderChrome: View {
 
                 Spacer()
 
-                if voiceAvailable { voiceButton }
+                if voiceAvailable { followModeSwitch }
 
                 modeToggle
 
@@ -63,6 +67,19 @@ struct ReaderChrome: View {
             .padding(.horizontal, Spacing.xl)
             // Clear the iPadOS multitasking / window controls at the top.
             .padding(.top, Spacing.xxl)
+
+            // Instruction caption — visible while the chrome is up (it shares the
+            // chrome's fade), so the controls explain themselves, then get out of
+            // the way. Only where the play button exists (script reader).
+            if !labeledPrevNext {
+                Text(instructionText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.ink2)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, 6)
+                    .background(Theme.surface2, in: Capsule())
+                    .padding(.top, Spacing.sm)
+            }
 
             Spacer()
 
@@ -81,7 +98,7 @@ struct ReaderChrome: View {
             }
 
             FloatingControlCluster(
-                isPlaying: vm.isPlaying,
+                isPlaying: isRunning ?? vm.isPlaying,
                 labeledPrevNext: labeledPrevNext,
                 elapsed: vm.elapsed,
                 timeLimit: vm.timeLimit,
@@ -90,7 +107,7 @@ struct ReaderChrome: View {
                 onAa: onAa,
                 onSizeUp: onSizeUp,
                 onPrev: onPrev,
-                onTogglePlay: { vm.togglePlay() },
+                onTogglePlay: onTogglePlay ?? { vm.togglePlay() },
                 onNext: onNext,
                 onPaceTap: onPaceTap
             )
@@ -129,14 +146,45 @@ struct ReaderChrome: View {
         return 6 + CGFloat(wave * level * 20)
     }
 
-    /// Toggle voice-follow. Filled + tinted while listening.
-    private var voiceButton: some View {
-        Button(action: onToggleVoice) {
-            Image(systemName: voiceActive ? "waveform.circle.fill" : "waveform")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(voiceActive ? Theme.onAccent : Theme.accent)
-                .frame(width: Spacing.hitTarget, height: Spacing.hitTarget)
-                .background(voiceActive ? Theme.accent : Theme.accentSoft(scheme), in: Circle())
+    /// Contextual one-liner that ties the play button to the active mode.
+    private var instructionText: String {
+        if voiceAvailable {
+            switch vm.followMode {
+            case .voice:
+                return vm.voiceFollowActive
+                    ? "Listening — play/pause stops listening and holds the timer"
+                    : "Voice-follow — press play to track your speech"
+            case .autoScroll:
+                return vm.isPlaying
+                    ? "Auto-scrolling — press pause to stop"
+                    : "Auto-scroll — press play for time-paced scrolling"
+            }
+        }
+        return vm.isPlaying ? "Press pause to stop" : "Press play to auto-scroll"
+    }
+
+    /// Auto-scroll ↔ Voice switch. Picks the follow mode; the play button starts
+    /// it. Selecting Voice does not open the mic until you press play.
+    private var followModeSwitch: some View {
+        HStack(spacing: 2) {
+            modeSegment(.autoScroll)
+            modeSegment(.voice)
+        }
+        .padding(2)
+        .background(Theme.surface2, in: Capsule())
+    }
+
+    private func modeSegment(_ m: FollowMode) -> some View {
+        let selected = vm.followMode == m
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { vm.setFollowMode(m) }
+        } label: {
+            Label(m.label, systemImage: m.symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(selected ? Theme.onAccent : Theme.accent)
+                .padding(.horizontal, Spacing.sm)
+                .frame(height: 32)
+                .background(selected ? Theme.accent : Color.clear, in: Capsule())
         }
         .buttonStyle(.plain)
     }

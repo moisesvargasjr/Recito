@@ -11,6 +11,15 @@
 import SwiftUI
 import Combine
 
+/// How the reader advances: time-paced auto-scroll, or speech-driven
+/// voice-follow. The play button starts/pauses whichever is active.
+enum FollowMode: String {
+    case autoScroll
+    case voice
+    var label: String { self == .voice ? "Voice" : "Auto" }
+    var symbol: String { self == .voice ? "waveform" : "arrow.down" }
+}
+
 final class ReaderViewModel: ObservableObject {
     let talk: Talk
     let parsed: ParsedDocument
@@ -92,6 +101,10 @@ final class ReaderViewModel: ObservableObject {
     /// Whether voice-follow is usable on this device (capability ladder).
     let voiceAvailable: Bool
     @Published var voiceFollowActive = false
+    /// Active follow mode. The on-screen switch flips this (only offered when
+    /// voice-follow is available — script mode, supported device). Selecting a
+    /// mode does NOT start it; the play button does.
+    @Published var followMode: FollowMode = .autoScroll
     /// 0–1 live mic level while listening (drives the "listening" indicator).
     @Published var audioLevel: Float = 0
     /// Predicted reading position, published each tick for smooth scrolling.
@@ -111,10 +124,20 @@ final class ReaderViewModel: ObservableObject {
     var maxLeadWords: Double = 18
     /// If the recognizer hasn't advanced for this long, freeze the glide (pause).
     private let pauseHold: TimeInterval = 1.2
+    /// Time constant for easing the predicted position toward the recognizer.
+    /// Larger = smoother but laggier; smaller = snappier but more reactive to
+    /// recognition bursts. ~0.28s reads as fluid without trailing noticeably.
+    private let followTimeConstant: TimeInterval = 0.28
 
     // Diagnostics (shown in the voice debug panel during bring-up).
     @Published var voiceStatus: String = ""
     @Published var recognizedText: String = ""
+    /// How many words the predicted position is leading the recognizer by — i.e.
+    /// how much the predictive scroller is papering over ASR lag. Lower = the
+    /// engine is keeping up on its own. Watch this when comparing `.fastResults`.
+    @Published var voiceLeadWords: Double = 0
+    /// Recognizer's current global token index (advances as words are confirmed).
+    @Published var voiceRecognizedIndex: Double = 0
 
     @MainActor
     func toggleVoiceFollow(localeIdentifier: String) async {
@@ -152,13 +175,14 @@ final class ReaderViewModel: ObservableObject {
                     guard let self else { return }
                     self.appendRecognized(word.text)
                     if let position = self.alignmentEngine.consume(word) {
-                        // Update the recognition anchor; the ticker glides toward it.
+                        // Only move the recognition *anchor* here — never the
+                        // rendered position. The ticker eases `predictedIndex`
+                        // toward this, so a burst of recognized words can't yank
+                        // the scroll. (Recognition arrives in bursts; the glide
+                        // must stay continuous.)
                         self.recognizedIndex = Double(position.globalIndex)
                         self.lastRecognizedAdvance = self.elapsed
                         self.estimateReadingPace()
-                        if self.predictedIndex < self.recognizedIndex {
-                            self.predictedIndex = self.recognizedIndex // never fall behind
-                        }
                     }
                 },
                 onLevel: { [weak self] level in
@@ -259,6 +283,26 @@ final class ReaderViewModel: ObservableObject {
 
     func togglePlay() { isPlaying ? pause() : play() }
 
+    /// Is the *active* follow mode currently running — drives the play/pause icon.
+    var isFollowRunning: Bool { followMode == .voice ? voiceFollowActive : isPlaying }
+
+    /// Flip Auto-scroll ↔ Voice, stopping whatever was running first. Does not
+    /// auto-start the new mode (the play button does that).
+    func setFollowMode(_ newMode: FollowMode) {
+        guard newMode != followMode else { return }
+        if voiceFollowActive { pauseVoice() }
+        if isPlaying { pause() }
+        followMode = newMode
+        wakeChrome()
+    }
+
+    /// Pause voice-follow: stop listening and hold the pacing clock, so the
+    /// timer pauses too (symmetric with pausing auto-scroll).
+    func pauseVoice() {
+        stopVoiceFollow()
+        stopClock()
+    }
+
     func play() {
         if voiceFollowActive { stopVoiceFollow() } // play and voice are exclusive
         isHoldingForScripture = false
@@ -335,13 +379,28 @@ final class ReaderViewModel: ObservableObject {
 
     private func advancePrediction() {
         let stalled = elapsed - lastRecognizedAdvance > pauseHold
+        // Predictive free-run glide at the measured reading pace.
         if !stalled {
             predictedIndex += wordsPerSecond * tick
         }
-        // Stay ahead of recognition, but not by more than the max lead.
-        predictedIndex = min(predictedIndex, recognizedIndex + maxLeadWords)
-        predictedIndex = max(predictedIndex, recognizedIndex)
+        // Per-tick easing factor for a ~`followTimeConstant` convergence. Used to
+        // approach the recognizer instead of snapping to it, so neither a burst
+        // of recognized words (lower bound) nor overshoot past the lead ceiling
+        // (upper bound) produces a visible lurch.
+        let k = 1 - exp(-tick / followTimeConstant)
+        if predictedIndex < recognizedIndex {
+            // Recognition overtook the glide (speaker faster than estimate): ease
+            // up to catch it rather than jumping.
+            predictedIndex += (recognizedIndex - predictedIndex) * k
+        }
+        let leadCeiling = recognizedIndex + maxLeadWords
+        if predictedIndex > leadCeiling {
+            // Ran too far ahead of the truth: ease back down, don't clamp hard.
+            predictedIndex += (leadCeiling - predictedIndex) * k
+        }
         voicePosition = alignmentEngine.position(forFractionalGlobalIndex: predictedIndex)
+        voiceLeadWords = predictedIndex - recognizedIndex
+        voiceRecognizedIndex = recognizedIndex
     }
 
     private func stopClock() {
@@ -372,8 +431,11 @@ final class ReaderViewModel: ObservableObject {
 
     /// Flip between Script and Outline, keeping the cursor in range.
     func switchMode() {
+        if voiceFollowActive { pauseVoice() }
         pause()
         mode = (mode == .script) ? .outline : .script
+        // Voice-follow only exists in script mode; reset so we return cleanly.
+        if mode == .outline { followMode = .autoScroll }
         currentIndex = min(currentIndex, max(0, unitCount - 1))
         playbackOffset = 0
     }
@@ -403,7 +465,10 @@ final class ReaderViewModel: ObservableObject {
 
     private func scheduleChromeHide() {
         cancelChromeHide()
-        guard isPlaying else { return }
+        // Auto-hide whenever the reader is actively running — auto-scroll OR
+        // voice-follow (which keeps isPlaying false). Otherwise the bar and its
+        // instruction caption would stay up for the whole talk.
+        guard isPlaying || voiceFollowActive else { return }
         let work = DispatchWorkItem { [weak self] in
             withAnimation(.easeOut(duration: 0.3)) { self?.chromeVisible = false }
         }

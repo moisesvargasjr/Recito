@@ -42,6 +42,7 @@ final class DisplaySettings: ObservableObject {
         static let defaultTimeLimit = "settings.defaultTimeLimit"
         static let recognitionLanguage = "settings.recognitionLanguage"
         static let autoOpenScripture = "settings.autoOpenScripture"
+        static let showVoiceDebug = "settings.showVoiceDebug"
     }
 
     /// Voice-follow recognition languages (label, BCP-47 identifier).
@@ -69,6 +70,10 @@ final class DisplaySettings: ObservableObject {
     /// Auto-open the reference app at a scripture as you approach it (off by
     /// default; otherwise the cue is glance-only and you tap to open).
     @Published var autoOpenScripture: Bool { didSet { defaults.set(autoOpenScripture, forKey: Key.autoOpenScripture) } }
+    /// Show the voice-follow diagnostics overlay (recognized words, predictor
+    /// lead, pace). Debug builds only — the toggle and overlay are compiled out
+    /// of release, so this value is inert there.
+    @Published var showVoiceDebug: Bool { didSet { defaults.set(showVoiceDebug, forKey: Key.showVoiceDebug) } }
 
     /// Pacing presets in minutes. Configurable, not hardcoded (PRD).
     let pacingPresets: [Int] = [10, 15, 30, 45, 60]
@@ -85,6 +90,7 @@ final class DisplaySettings: ObservableObject {
         defaultTimeLimit = defaults.object(forKey: Key.defaultTimeLimit) as? Double ?? 30 * 60
         recognitionLanguage = defaults.string(forKey: Key.recognitionLanguage) ?? "es-ES"
         autoOpenScripture = defaults.bool(forKey: Key.autoOpenScripture)
+        showVoiceDebug = defaults.bool(forKey: Key.showVoiceDebug)
     }
 
     // MARK: - Derived reading values

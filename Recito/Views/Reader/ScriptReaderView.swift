@@ -72,21 +72,25 @@ struct ScriptReaderView: View {
                     returnToLiveButton
                 }
 
+                #if DEBUG
+                if vm.voiceFollowActive && settings.showVoiceDebug {
+                    VStack { Spacer(); voiceDebugPanel }.padding(.bottom, 96)
+                }
+                #endif
+
                 ReaderChrome(
                     vm: vm,
                     labeledPrevNext: false,
                     onClose: { dismiss() },
                     onAa: { showSettings = true },
-                    onPrev: { jump(by: -1) },
-                    onNext: { jump(by: 1) },
+                    onPrev: { transportJump(-1) },
+                    onNext: { transportJump(1) },
                     onSizeDown: { adjustTextSize(-0.08) },
                     onSizeUp: { adjustTextSize(0.08) },
                     onPaceTap: { showPacing = true },
                     voiceAvailable: vm.voiceAvailable,
-                    voiceActive: vm.voiceFollowActive,
-                    onToggleVoice: {
-                        Task { await vm.toggleVoiceFollow(localeIdentifier: settings.recognitionLanguage) }
-                    },
+                    isRunning: vm.isFollowRunning,
+                    onTogglePlay: { togglePlayForMode() },
                     topTrailing: cueChip
                 )
             }
@@ -125,7 +129,11 @@ struct ScriptReaderView: View {
                 guard let position, !isPreviewing,
                       let offset = wordOffset(section: position.sectionIndex,
                                               fraction: position.fractionInSection) else { return }
-                vm.currentIndex = position.sectionIndex
+                // Only republish the section index on a real boundary crossing —
+                // assigning the same value still fires @Published 60×/s otherwise.
+                if vm.currentIndex != position.sectionIndex {
+                    vm.currentIndex = position.sectionIndex
+                }
                 vm.playbackOffset = offset
                 viewOffset = offset
             }
@@ -291,6 +299,37 @@ struct ScriptReaderView: View {
 
     // MARK: - Navigation / interaction
 
+    /// Play/pause the *active* follow mode. Auto-scroll toggles the clock-driven
+    /// scroll; voice toggles listening (start needs the recognition locale).
+    private func togglePlayForMode() {
+        switch vm.followMode {
+        case .autoScroll:
+            vm.togglePlay()
+        case .voice:
+            if vm.voiceFollowActive {
+                vm.pauseVoice()
+            } else {
+                Task { await vm.startVoiceFollow(localeIdentifier: settings.recognitionLanguage) }
+            }
+        }
+    }
+
+    /// Prev / Next. While listening they re-anchor the voice tracker to the
+    /// neighbouring paragraph (so they do something useful in voice mode);
+    /// otherwise they move the playback point as before.
+    private func transportJump(_ delta: Int) {
+        guard vm.voiceFollowActive else { jump(by: delta); return }
+        let reading = readingIndices
+        guard !reading.isEmpty else { return }
+        let pos = reading.firstIndex(of: vm.currentIndex)
+            ?? reading.enumerated().min(by: {
+                abs($0.element - vm.currentIndex) < abs($1.element - vm.currentIndex)
+            })?.offset
+            ?? 0
+        let target = reading[min(max(pos + delta, 0), reading.count - 1)]
+        vm.reseatVoice(to: target)
+    }
+
     /// Prev / Next move the playback point to the neighboring reading paragraph
     /// (skipping headings).
     private func jump(by delta: Int) {
@@ -419,6 +458,42 @@ struct ScriptReaderView: View {
             .background(Theme.surface, in: Capsule())
             .cardShadow()
     }
+
+    #if DEBUG
+    /// Voice-follow diagnostics, Debug builds only (compiled out of release).
+    /// Surfaces the live recognition stream so you can feel transcription
+    /// latency directly, plus how far the predictor is leading the recognizer.
+    private var voiceDebugPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(vm.voiceFollowActive ? Color.green : Color.secondary)
+                    .frame(width: 7, height: 7)
+                Text("VOICE DEBUG").tracking(1)
+                Spacer()
+                Text(String(format: "lvl %.2f", vm.audioLevel))
+            }
+            Text(vm.recognizedText.isEmpty ? "— no words yet —" : vm.recognizedText)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                Text(String(format: "lead %.1fw", vm.voiceLeadWords))
+                Text(String(format: "pace %.1f w/s", vm.wordsPerSecond))
+                Text(String(format: "rec %.0f", vm.voiceRecognizedIndex))
+            }
+            if !vm.voiceStatus.isEmpty {
+                Text(vm.voiceStatus).lineLimit(1).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+        .foregroundStyle(.white)
+        .padding(10)
+        .frame(maxWidth: 360, alignment: .leading)
+        .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, Spacing.md)
+    }
+    #endif
 
     private var cueChip: AnyView? {
         guard let citation = vm.upcomingCitation else { return nil }
