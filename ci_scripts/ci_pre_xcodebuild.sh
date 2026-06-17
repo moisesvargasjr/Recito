@@ -18,8 +18,13 @@ fi
 
 PBXPROJ="$CI_PRIMARY_REPOSITORY_PATH/Recito.xcodeproj/project.pbxproj"
 
+# Offset so we clear the manually-uploaded Build 1 already in App Store Connect
+# (Xcode Cloud's $CI_BUILD_NUMBER starts at 1, which would collide). First Cloud
+# build becomes 101, and every later one stays unique and increasing.
+BUILD_NUMBER=$((CI_BUILD_NUMBER + 100))
+
 # BSD sed (macOS) in-place edit. Updates every target's build number; only the
 # app's reaches App Store Connect, and keeping them in lockstep is harmless.
-sed -i '' -E "s/CURRENT_PROJECT_VERSION = [^;]+;/CURRENT_PROJECT_VERSION = ${CI_BUILD_NUMBER};/g" "$PBXPROJ"
+sed -i '' -E "s/CURRENT_PROJECT_VERSION = [^;]+;/CURRENT_PROJECT_VERSION = ${BUILD_NUMBER};/g" "$PBXPROJ"
 
-echo "Set CURRENT_PROJECT_VERSION to ${CI_BUILD_NUMBER}"
+echo "Set CURRENT_PROJECT_VERSION to ${BUILD_NUMBER} (CI_BUILD_NUMBER=${CI_BUILD_NUMBER} + 100 offset)"
