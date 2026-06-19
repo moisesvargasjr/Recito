@@ -10,6 +10,7 @@
 
 import SwiftUI
 import Combine
+import os
 
 /// How the reader advances: time-paced auto-scroll, or speech-driven
 /// voice-follow. The play button starts/pauses whichever is active.
@@ -50,6 +51,13 @@ final class ReaderViewModel: ObservableObject {
     private var chromeHideWork: DispatchWorkItem?
     private let tick: TimeInterval = 1.0 / 60.0
 
+    /// Diagnostics for the voice-follow freeze investigation. `os.Logger` is
+    /// visible in Console.app / device logs even in TestFlight (release) builds,
+    /// so a real talk can confirm whether a stall coincides with thermal
+    /// throttling. View by filtering Console for subsystem `com.moisesvargas.Recito`.
+    private let voiceLog = Logger(subsystem: "com.moisesvargas.Recito", category: "voice")
+    private var thermalObserver: NSObjectProtocol?
+
     init(talk: Talk, speechSource: SpeechSource? = nil) {
         self.talk = talk
         let parsed = talk.parsed
@@ -73,6 +81,9 @@ final class ReaderViewModel: ObservableObject {
     deinit {
         ticker?.invalidate()
         speechSource.stop()
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+        }
     }
 
     /// Talk time limit in seconds (pacing); editable via the Pacing sheet.
@@ -165,6 +176,7 @@ final class ReaderViewModel: ObservableObject {
         lastRecognizedAdvance = elapsed
         startClock()                      // keep pacing running + drive the glide
         voiceFollowActive = true
+        observeThermalState()
         recognizedText = ""
         voiceStatus = "Starting…"
         wakeChrome()
@@ -214,6 +226,36 @@ final class ReaderViewModel: ObservableObject {
         audioLevel = 0
         voiceStatus = ""
         voicePosition = nil
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+            self.thermalObserver = nil
+        }
+    }
+
+    /// Log thermal state at start and on every change while voice-follow runs,
+    /// so a freeze during a long talk can be correlated with thermal throttling.
+    private func observeThermalState() {
+        logThermalState()
+        thermalObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in self?.logThermalState() }
+    }
+
+    private func logThermalState() {
+        let name: String
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: name = "nominal"
+        case .fair: name = "fair"
+        case .serious: name = "serious"
+        case .critical: name = "critical"
+        @unknown default: name = "unknown"
+        }
+        voiceLog.notice("thermalState=\(name, privacy: .public) elapsed=\(Int(self.elapsed))s")
+        if name == "serious" || name == "critical" {
+            voiceStatus = "Device warm (\(name)) — voice tracking may stutter."
+        }
     }
 
     /// Manually re-anchor voice tracking to a section (e.g. double-tap when the

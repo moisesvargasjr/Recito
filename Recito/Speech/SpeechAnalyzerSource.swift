@@ -48,6 +48,16 @@ final class SpeechAnalyzerSource: SpeechSource {
     ) async throws {
         stop()
 
+        // Deliver every recognizer callback on the main thread. The results loop
+        // below (and the async body of this method) run on background executors,
+        // but these callbacks mutate @Published view-model state and the shared
+        // predictive-scroll values the main-thread ticker also touches — calling
+        // them off-main is a data race and a "publishing from a background thread"
+        // violation. A serial source + DispatchQueue.main.async preserves order.
+        let emitWord: (RecognizedWord) -> Void = { word in DispatchQueue.main.async { onWord(word) } }
+        let emitStatus: (String) -> Void = { status in DispatchQueue.main.async { onStatus(status) } }
+        let emitError: (String) -> Void = { message in DispatchQueue.main.async { onError(message) } }
+
         let locale = Locale(identifier: localeIdentifier)
         // `.fastResults` biases the transcriber toward responsiveness (faster,
         // slightly less accurate volatile guesses) — paired with `.volatileResults`
@@ -65,11 +75,11 @@ final class SpeechAnalyzerSource: SpeechSource {
         // Ensure the language model is installed (downloads on first use).
         do {
             if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                onStatus("Downloading \(localeIdentifier) model… (one-time)")
+                emitStatus("Downloading \(localeIdentifier) model… (one-time)")
                 try await request.downloadAndInstall()
             }
         } catch {
-            onError("Language model unavailable: \(error.localizedDescription)")
+            emitError("Language model unavailable: \(error.localizedDescription)")
             throw error
         }
 
@@ -91,7 +101,13 @@ final class SpeechAnalyzerSource: SpeechSource {
         self.analyzer = analyzer
         analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
 
-        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        // Bound the audio hand-off buffer. With the default (unbounded) policy,
+        // any moment the analyzer falls behind real-time audio accumulates mic
+        // buffers without limit — over a long talk that's steady memory growth
+        // and eventually a system memory-pressure stall. Keeping only the newest
+        // ~2s drops stale audio under overload (so recognition resumes near live)
+        // instead of leaking. Normal operation never fills this.
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream(bufferingPolicy: .bufferingNewest(24))
         inputContinuation = continuation
 
         // Audio capture.
@@ -115,7 +131,7 @@ final class SpeechAnalyzerSource: SpeechSource {
         }
         audioEngine.prepare()
         try audioEngine.start()
-        onStatus("Listening (\(localeIdentifier))…")
+        emitStatus("Listening (\(localeIdentifier))…")
 
         emittedInPhrase = 0
         resultsTask = Task { [weak self] in
@@ -127,14 +143,14 @@ final class SpeechAnalyzerSource: SpeechSource {
                         .map(String.init)
                     if words.count > self.emittedInPhrase {
                         for word in words[self.emittedInPhrase...] {
-                            onWord(RecognizedWord(text: word, timestamp: 0))
+                            emitWord(RecognizedWord(text: word, timestamp: 0))
                         }
                         self.emittedInPhrase = words.count
                     }
                     if result.isFinal { self.emittedInPhrase = 0 }
                 }
             } catch {
-                onError("Recognition error: \(error.localizedDescription)")
+                emitError("Recognition error: \(error.localizedDescription)")
             }
         }
 
