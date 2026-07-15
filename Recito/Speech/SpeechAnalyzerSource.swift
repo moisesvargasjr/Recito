@@ -87,7 +87,11 @@ final class SpeechAnalyzerSource: SpeechSource {
         // resource throttling that otherwise makes it buffer/batch audio under
         // load — the likely cause of the ~1–2s tracking lag. Worth the extra
         // compute for a live talk; revert this branch if it costs too much battery.
+        // The API only exists in the iOS 27 SDK, and `#available` is a runtime
+        // check — so gate at compile time too, or release toolchains (and Xcode
+        // Cloud once it drops a beta seed) fail with "extra argument in call".
         let analyzer: SpeechAnalyzer
+        #if compiler(>=6.4) // Xcode 27+
         if #available(iOS 27.0, *) {
             let options = SpeechAnalyzer.Options(
                 priority: .userInitiated,
@@ -98,6 +102,9 @@ final class SpeechAnalyzerSource: SpeechSource {
         } else {
             analyzer = SpeechAnalyzer(modules: [transcriber])
         }
+        #else
+        analyzer = SpeechAnalyzer(modules: [transcriber])
+        #endif
         self.analyzer = analyzer
         analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
 
