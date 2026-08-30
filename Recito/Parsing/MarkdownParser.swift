@@ -46,6 +46,7 @@ enum MarkdownParser {
     static func tokenize(_ source: String) -> [Block] {
         var blocks: [Block] = []
         var paragraphBuffer: [String] = []
+        let source = stripLeadingNotes(source)
 
         func flushParagraph() {
             guard !paragraphBuffer.isEmpty else { return }
@@ -75,7 +76,7 @@ enum MarkdownParser {
                 }
                 continue
             }
-            paragraphBuffer.append(trimmed)
+            paragraphBuffer.append(stripQuoteMarker(trimmed))
         }
         flushParagraph()
         return blocks
@@ -137,5 +138,82 @@ enum MarkdownParser {
             text = text.replacingOccurrences(of: token, with: "")
         }
         return text
+    }
+
+    // MARK: - Leading notes
+
+    /// Vault notes open with material that is *about* the talk rather than part
+    /// of it: YAML frontmatter, and an editorial blockquote ("Source: Apple
+    /// Notes...", "Rebalanced variant of..."). Both are dropped so the talk
+    /// starts on its first spoken line. Blockquotes later in the document are
+    /// kept — those are quoted passages the speaker may well read aloud.
+    static func stripLeadingNotes(_ source: String) -> String {
+        var lines = source.components(separatedBy: .newlines)
+
+        // Frontmatter: a leading `---` fence through its closing `---`.
+        var cursor = 0
+        while cursor < lines.count, lines[cursor].trimmingCharacters(in: .whitespaces).isEmpty {
+            cursor += 1
+        }
+        if cursor < lines.count, isFence(lines[cursor]) {
+            var scan = cursor + 1
+            while scan < lines.count, !isFence(lines[scan]) { scan += 1 }
+            if scan < lines.count { lines.removeFirst(scan + 1) }
+        }
+
+        // Editorial blockquote: leading `>` lines, plus blank lines around them,
+        // up to the first line of real content.
+        var drop = 0
+        var sawQuote = false
+        var index = 0
+        while index < lines.count {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                index += 1
+                continue
+            }
+            guard isQuoteLine(trimmed) else { break }
+            sawQuote = true
+            index += 1
+            drop = index
+        }
+        if sawQuote { lines.removeFirst(drop) }
+
+        while let first = lines.first, first.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeFirst()
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The document's first heading, if it opens with one. Vault talks title
+    /// themselves from this and fall back to their filename — a truncated first
+    /// sentence makes a far worse library card than the name of the note.
+    static func headingTitle(from source: String) -> String? {
+        for line in stripLeadingNotes(source).components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            guard let heading = headingMatch(trimmed) else { return nil }
+            let text = clean(heading.text)
+            return text.isEmpty ? nil : text
+        }
+        return nil
+    }
+
+    private static func isFence(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespaces) == "---"
+    }
+
+    private static func isQuoteLine(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix(">")
+    }
+
+    /// Drop the `>` marker(s) from a quoted line, keeping the quoted text.
+    static func stripQuoteMarker(_ trimmed: String) -> String {
+        var text = Substring(trimmed)
+        while text.first == ">" {
+            text = text.dropFirst()
+            while text.first == " " { text = text.dropFirst() }
+        }
+        return String(text)
     }
 }

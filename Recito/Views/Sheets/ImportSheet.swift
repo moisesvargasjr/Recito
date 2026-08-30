@@ -17,6 +17,8 @@ struct ImportSheet: View {
     @State private var mode: DocumentMode = .script
     @State private var modePickedByUser = false
 
+    /// Ask the host to present the folder picker for vault linking.
+    var onLinkVault: (() -> Void)? = nil
     /// Called with the newly added talk so the caller can open it if desired.
     var onAdded: ((Talk) -> Void)? = nil
 
@@ -33,6 +35,7 @@ struct ImportSheet: View {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     pasteSection
                     importSection
+                    vaultSection
                 }
                 .padding(Spacing.xl)
             }
@@ -119,16 +122,31 @@ struct ImportSheet: View {
                 SheetNavRow(title: "Files app", showDivider: true) {
                     model.fileImporterPresented = true
                 }
+            }
+        }
+    }
+
+    /// Linking a folder is a different act from importing a file: the folder
+    /// keeps mirroring, so edits made elsewhere show up without re-importing.
+    private var vaultSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            GroupHeaderText("Or follow a folder")
+            SheetGroup {
                 SheetNavRow(
-                    title: "Another app",
-                    subtitle: "share sheet — e.g. a notes / Obsidian vault",
-                    showDivider: true
+                    title: store.vault.isLinked ? "Change linked folder" : "Link a vault folder",
+                    subtitle: store.vault.displayName.map { "Following \($0)" }
+                        ?? "e.g. an Obsidian folder of talks"
                 ) {
-                    // Inbound share-sheet handling is added later; for now the
-                    // file importer covers Files-based imports.
-                    model.fileImporterPresented = true
+                    dismiss()
+                    onLinkVault?()
                 }
             }
+
+            Text("Talks in a linked folder stay in sync — edit the note in Obsidian and the change is here next time you open Recito. Recito never writes into the folder.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.ink2)
+                .padding(.horizontal, Spacing.xs)
+                .padding(.top, Spacing.md)
         }
     }
 

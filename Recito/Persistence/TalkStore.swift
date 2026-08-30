@@ -19,9 +19,11 @@ final class TalkStore: ObservableObject {
     @Published private(set) var talks: [Talk] = []
 
     private let persistence: TalkPersistence
+    let vault: VaultFolder
 
-    init(persistence: TalkPersistence) {
+    init(persistence: TalkPersistence, vault: VaultFolder = VaultFolder()) {
         self.persistence = persistence
+        self.vault = vault
         self.talks = persistence.load()
     }
 
@@ -57,6 +59,18 @@ final class TalkStore: ObservableObject {
         persist()
     }
 
+    func setHidden(_ hidden: Bool, for id: Talk.ID) {
+        guard let index = talks.firstIndex(where: { $0.id == id }) else { return }
+        talks[index].isHidden = hidden
+        persist()
+    }
+
+    /// Adopt the result of a vault refresh.
+    func applyVaultMerge(_ merged: [Talk]) {
+        talks = merged
+        persist()
+    }
+
     private func persist() {
         persistence.save(talks)
     }
@@ -65,7 +79,7 @@ final class TalkStore: ObservableObject {
 extension TalkStore {
     /// Production store backed by a JSON file, seeded with samples on first run.
     static func live() -> TalkStore {
-        let store = TalkStore(persistence: JSONTalkPersistence())
+        let store = TalkStore(persistence: JSONTalkPersistence(), vault: VaultFolder())
         store.seedSamplesIfFirstRun()
         return store
     }

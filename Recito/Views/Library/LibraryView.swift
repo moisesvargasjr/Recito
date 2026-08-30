@@ -7,10 +7,14 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @EnvironmentObject private var store: TalkStore
+    @EnvironmentObject private var settings: DisplaySettings
     @StateObject private var model = LibraryViewModel()
+    @StateObject private var vault = VaultViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showImport = false
     @State private var showSettings = false
     @State private var openedTalk: Talk?
@@ -28,7 +32,26 @@ struct LibraryView: View {
             }
         }
         .sheet(isPresented: $showImport) {
-            ImportSheet { talk in openedTalk = talk }
+            ImportSheet(onLinkVault: { vault.pickerPresented = true }) { talk in
+                openedTalk = talk
+            }
+        }
+        .fileImporter(
+            isPresented: $vault.pickerPresented,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            vault.link(to: url, store: store, defaultTimeLimit: settings.defaultTimeLimit)
+        }
+        .task {
+            vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
+        }
+        .onChange(of: scenePhase) { phase in
+            // Obsidian syncs in the background; re-read whenever we come
+            // forward so an edit made elsewhere is already here.
+            guard phase == .active else { return }
+            vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
         }
         .sheet(isPresented: $showSettings) {
             TextDisplaySheet()
@@ -108,13 +131,23 @@ struct LibraryView: View {
                         open(talk)
                     }
                     .contextMenu {
-                        Button { editingTalk = talk } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            store.delete(talk)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                        if talk.source.isVault {
+                            Button {
+                                store.setHidden(!talk.isHidden, for: talk.id)
+                            } label: {
+                                talk.isHidden
+                                    ? Label("Show", systemImage: "eye")
+                                    : Label("Hide", systemImage: "eye.slash")
+                            }
+                        } else {
+                            Button { editingTalk = talk } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                store.delete(talk)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
