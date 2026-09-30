@@ -10,6 +10,7 @@ import Foundation
 import Testing
 @testable import Recito
 
+@MainActor
 struct VaultSyncTests {
 
     private func file(

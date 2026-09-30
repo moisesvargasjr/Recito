@@ -61,7 +61,7 @@ final class VaultViewModel: ObservableObject {
         let vault = store.vault
         let existing = store.talks
 
-        queue.async {
+        queue.async { [weak self] in
             let outcome: Swift.Result<VaultSync.Result, Error>
             do {
                 let scan = try vault.scan()
