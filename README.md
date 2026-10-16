@@ -40,11 +40,12 @@ Recognition arrives in bursts and lags real speech by a second or two, so the di
 - **Citation cues.** Inline citations are detected in the text; ones written as Markdown links surface as an upcoming cue chip, and when the scroll reaches one, auto-scroll holds (the pace clock keeps running) so you can read the reference aloud before resuming. An optional setting opens the linked reference in its own app as you approach it.
 - **Library.** Talks persist as a single JSON file in Application Support (atomic, off-main writes); search, most-recent-first sorting, and a Continue badge on the last-opened talk.
 - **Import.** Paste text or bring in `.md`/`.txt` files via the Files picker; the title is derived from the first line.
+- **Vault folder.** Follow a folder of Markdown notes — typically inside an Obsidian vault that syncs to the device — so a talk edited there is current the next time Recito comes forward. The folder is picked once (security-scoped bookmark) and re-read on foreground; Recito never writes into it. The file owns the text and title; Recito owns the time limit, reading mode, last-opened and hidden state. Vault talks are read-only here and can be hidden rather than deleted. YAML frontmatter and a leading editorial blockquote are dropped so a talk opens on its first spoken line, titles come from the first heading (falling back to the filename), and a file caught mid-sync is kept rather than treated as deleted.
 - **Reading display controls.** System or serif typeface, text size, line spacing, bold, light/dark/system theme, and keep-awake — all live-updating from the Aa sheet.
 
 ## Privacy
 
-All speech processing happens on the device. There is no cloud speech API, no backend, no account, and no analytics; the microphone and speech-recognition permission strings say exactly that. The only download is the system's on-device language model, fetched once by iOS itself. Talks live in the app's local container.
+All speech processing happens on the device. There is no cloud speech API, no backend, no account, and no analytics; the microphone and speech-recognition permission strings say exactly that. The only download is the system's on-device language model, fetched once by iOS itself. Talks live in the app's local container; a followed vault folder is only ever read.
 
 ## Tech stack
 
@@ -65,7 +66,7 @@ Recito/
   Speech/         SpeechSource protocol, Tier A/B/C sources, alignment engine
   ViewModels/     Reader (playback, voice-follow, pacing), library, import
   Views/          Library, script/outline readers, sheets, components
-  Persistence/    JSON talk store, display settings
+  Persistence/    JSON talk store, display settings, vault folder bookmark + sync
   DesignSystem/   Theme, typography, spacing, shadows
   Utilities/      Citation detection/linking, keep-awake, time formatting
 ```
@@ -82,6 +83,8 @@ Unit tests use Swift Testing and cover the pure-logic core:
 
 - `MarkdownParserTests` — one source producing both reading models (paragraph segmentation, headings, nested lists, prose fallback)
 - `ScriptAlignmentEngineTests` — straight reading, section advancement, dropped words and filler, fuzzy misrecognition, off-script holds, single-stray-word immunity, confirmed forward jumps, no backward movement, stopword safety
+- `VaultSyncTests` — new/edited/deleted files, Recito-owned state surviving refreshes, path-based matching, local talks untouched, unreadable-mid-sync files kept
+- `VaultNotesParsingTests` — frontmatter and leading editorial blockquote dropped, later quotations kept, heading-derived titles
 - Citation detection tests — matching real citations without false positives on bare number pairs like a "12:30" time
 
 Run them with Product → Test in Xcode, or:
