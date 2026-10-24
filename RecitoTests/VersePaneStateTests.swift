@@ -108,4 +108,17 @@ struct VersePaneStateTests {
         #expect(!VersePaneFailure.unavailable.isRetryable)
         #expect(!VersePaneFailure.blocked.isRetryable)
     }
+
+    // A page that already loaded stays on screen when a later navigation is blocked.
+    @Test func blockedAfterALoadKeepsThePage() {
+        #expect(State.reduce(.loaded, event: .failed(.blocked)) == .loaded)
+    }
+
+    @Test func blockedBeforeTheFirstLoadIsSurfaced() {
+        #expect(State.reduce(.loading, event: .failed(.blocked)) == .failed(.blocked))
+    }
+
+    @Test func realErrorsAfterALoadStillSurface() {
+        #expect(State.reduce(.loaded, event: .failed(.offline)) == .failed(.offline))
+    }
 }

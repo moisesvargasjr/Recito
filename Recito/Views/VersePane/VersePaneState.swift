@@ -91,6 +91,9 @@ nonisolated enum VersePaneState: Equatable, Sendable {
 
     static func reduce(_ state: VersePaneState, event: Event) -> VersePaneState {
         switch (state, event) {
+        case (.loaded, .failed(.blocked)):
+            // A later page-initiated navigation was refused; keep the verse.
+            return state
         case (_, .failed(let failure)):
             return .failed(failure)
         case (.failed(let failure), .retry):

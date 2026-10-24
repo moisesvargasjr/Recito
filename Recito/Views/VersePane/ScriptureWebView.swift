@@ -3,8 +3,10 @@
 //  Recito
 //
 //  A locked-down WKWebView for the verse pane: no persisted cookies or
-//  history, no link previews, no swipe navigation, and every navigation run
-//  through `ScriptureWebPolicy`. It reports load progress as reducer events.
+//  history, no link previews, no swipe navigation, every navigation run
+//  through `ScriptureWebPolicy`, and every subresource run through a content
+//  rule list (`ScriptureContentRules`). It reports load progress as reducer
+//  events and loads only once the rule list is installed.
 //
 
 import SwiftUI
@@ -60,16 +62,38 @@ extension ScriptureWebView {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: ScriptureWebView
         private var loadedURL: URL?
+        private var rulesResolved = false
+        private var rulesRequested = false
+        private var reloadBudget = WebReloadBudget()
 
         init(parent: ScriptureWebView) {
             self.parent = parent
         }
 
-        /// Loads only when the requested URL actually changed.
+        /// Loads only when the requested URL actually changed, and only after
+        /// the content rules are installed (or failed to compile, in which
+        /// case navigation policy alone applies).
         func load(_ url: URL, in webView: WKWebView) {
             guard url != loadedURL else { return }
             loadedURL = url
-            webView.load(URLRequest(url: url))
+            reloadBudget = WebReloadBudget()
+            if rulesResolved {
+                webView.load(URLRequest(url: url))
+            } else {
+                installRules(in: webView)
+            }
+        }
+
+        private func installRules(in webView: WKWebView) {
+            guard !rulesRequested else { return }
+            rulesRequested = true
+            let controller = webView.configuration.userContentController
+            Task { [weak self, weak webView] in
+                await ScriptureContentRules.install(into: controller)
+                guard let self, let webView else { return }
+                self.rulesResolved = true
+                if let url = self.loadedURL { webView.load(URLRequest(url: url)) }
+            }
         }
 
         // MARK: Policy
@@ -105,6 +129,13 @@ extension ScriptureWebView {
             decidePolicyFor navigationResponse: WKNavigationResponse,
             decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
         ) {
+            // Anything the web view can't render would otherwise become a
+            // download or a blank page.
+            guard navigationResponse.canShowMIMEType else {
+                decisionHandler(.cancel)
+                if navigationResponse.isForMainFrame { parent.onEvent(.failed(.blocked)) }
+                return
+            }
             if navigationResponse.isForMainFrame,
                let http = navigationResponse.response as? HTTPURLResponse,
                let failure = VersePaneFailure.classify(httpStatus: http.statusCode) {
@@ -137,8 +168,15 @@ extension ScriptureWebView {
             report(error)
         }
 
+        /// The web content process died (memory pressure). Reload the verse a
+        /// couple of times, then show an error instead of looping.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            webView.reload()
+            guard let url = loadedURL, let next = reloadBudget.consuming() else {
+                parent.onEvent(.failed(.other))
+                return
+            }
+            reloadBudget = next
+            webView.load(URLRequest(url: url))
         }
 
         private func report(_ error: Error) {
