@@ -81,12 +81,16 @@ struct ReaderStage: View {
         }
     }
 
-    /// The verse pane content. Swap the placeholder for the real pane here:
-    /// `VersePaneView(citation: citation, url: citation.url, onDone: { vm.closeVerse() })`
+    /// The in-app verse pane. Prefers the talk's own link, like the JW Library
+    /// hand-off; the pane's web policy refuses anything outside jw.org.
     @ViewBuilder
     private var versePane: some View {
         if let citation = vm.presentedCitation {
-            VersePanePlaceholder(citation: citation, onDone: { vm.closeVerse() })
+            VersePaneView(
+                citation: citation,
+                url: citation.url ?? JWLibraryLinker().url(for: citation),
+                onDone: { vm.closeVerse() }
+            )
         }
     }
 
