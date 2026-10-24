@@ -28,6 +28,9 @@ struct LibraryGridPlan: Equatable, Sendable {
     static let sidePadding: CGFloat = Spacing.lg
     /// Base hinge gutter: wider than the card spacing so the fold reads as a seam.
     static let hingeBaseGutter: CGFloat = Spacing.xxl
+    /// Narrower minimum card for compact width: the cover display's trailing
+    /// side toolbar leaves ~366 pt, which must still hold 2 columns.
+    static let compactMinCard: CGFloat = 150
 
     var gutter: CGFloat { split?.gutter ?? LayoutMetrics.librarySpacing }
 
@@ -35,7 +38,11 @@ struct LibraryGridPlan: Equatable, Sendable {
     var diagnostics: String { "columns=\(columns);gutter=\(Int(gutter.rounded()))" }
 
     static func make(containerWidth: CGFloat, isRegular: Bool, divisions: [CGRect]) -> LibraryGridPlan {
-        let columns = LayoutMetrics.libraryColumnCount(width: containerWidth, isRegular: isRegular)
+        let columns = LayoutMetrics.libraryColumnCount(
+            width: containerWidth,
+            isRegular: isRegular,
+            minCard: isRegular ? LayoutMetrics.libraryMinCard : compactMinCard
+        )
         let single = LibraryGridPlan(columns: columns, split: nil)
         guard isRegular, columns >= 2, columns.isMultiple(of: 2),
               let fold = verticalDivision(in: divisions, containerWidth: containerWidth)

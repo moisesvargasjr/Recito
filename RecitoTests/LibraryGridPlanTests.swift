@@ -16,6 +16,16 @@ struct LibraryGridPlanTests {
         #expect(plan.diagnostics == "columns=2;gutter=12")
     }
 
+    @Test func coverDisplayBesideSideToolbarKeepsTwoColumns() {
+        // 466 pt display minus the trailing side toolbar.
+        let plan = LibraryGridPlan.make(containerWidth: 366, isRegular: false, divisions: [])
+        #expect(plan.columns == 2)
+    }
+
+    @Test func innerPortraitIsTwoColumns() {
+        #expect(LibraryGridPlan.make(containerWidth: 669, isRegular: true, divisions: []).columns == 2)
+    }
+
     @Test func innerLandscapeWithoutFoldIsOneFourColumnGrid() {
         let plan = LibraryGridPlan.make(containerWidth: 951, isRegular: true, divisions: [])
         #expect(plan.columns == 4)
