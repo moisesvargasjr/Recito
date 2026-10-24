@@ -94,6 +94,8 @@ final class ReaderViewModel: ObservableObject {
     var consumedScriptureIndices: Set<Int> = []
     var predictor = VoicePredictor()
     var thermalObserver: NSObjectProtocol?
+    /// True across the permission prompt, so a second tap can't start voice twice.
+    var isStartingVoice = false
 
     /// Diagnostics for the voice-follow freeze investigation. `os.Logger` is
     /// visible in Console.app / device logs even in TestFlight (release) builds,

@@ -72,6 +72,24 @@ struct ReaderViewModelVoiceTests {
         #expect(h.speech.stopCount == 1)
     }
 
+    @Test func startFailureStopsThePacingClock() async {
+        let h = harness()
+        h.speech.startError = SpyStartFailure()
+        await h.vm.startVoiceFollow(localeIdentifier: "en-US")
+        #expect(!h.ticker.isRunning)
+        h.ticker.fire(30)
+        #expect(h.vm.elapsed == 0)
+    }
+
+    @Test func overlappingStartsListenOnce() async {
+        let h = harness()
+        async let first: Void = h.vm.startVoiceFollow(localeIdentifier: "en-US")
+        async let second: Void = h.vm.startVoiceFollow(localeIdentifier: "en-US")
+        _ = await (first, second)
+        #expect(h.speech.startCount == 1)
+        #expect(h.vm.voiceFollowActive)
+    }
+
     @Test func startingVoiceStopsAutoScroll() async {
         let h = harness()
         h.vm.play()

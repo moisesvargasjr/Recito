@@ -30,6 +30,9 @@ extension ReaderViewModel {
             voiceStatus = "Voice-follow needs script mode on a supported device."
             return
         }
+        guard !voiceFollowActive, !isStartingVoice else { return }
+        isStartingVoice = true
+        defer { isStartingVoice = false }
         voiceStatus = "Requesting permission…"
         guard await speechSource.requestAuthorization() else {
             voiceStatus = "Microphone or speech permission denied. Enable it in Settings."
@@ -57,9 +60,9 @@ extension ReaderViewModel {
                 onError: { [weak self] in self?.voiceStatus = "Error: \($0)" }
             )
         } catch {
-            voiceFollowActive = false
+            stopVoiceFollow()
+            stopClock()
             voiceStatus = "Couldn't start: \(error.localizedDescription)"
-            speechSource.stop()
         }
     }
 
