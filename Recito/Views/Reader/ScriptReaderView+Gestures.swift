@@ -46,9 +46,13 @@ extension ScriptReaderView {
         DispatchQueue.main.asyncAfter(deadline: .now() + returnDelay, execute: work)
     }
 
+    /// Cancels both the pending return and the delayed end of the preview, so
+    /// a late `isPreviewing = false` can't land on a new drag or jump.
     func cancelReturn() {
         returnWork?.cancel()
         returnWork = nil
+        previewEndWork?.cancel()
+        previewEndWork = nil
     }
 
     /// Animate the view back to the playback spot and end the preview.
@@ -57,7 +61,12 @@ extension ScriptReaderView {
     private func returnToLive(duration: TimeInterval) {
         cancelReturn()
         withAnimation(.easeInOut(duration: duration)) { viewOffset = vm.playbackOffset }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { isPreviewing = false }
+        let end = DispatchWorkItem {
+            isPreviewing = false
+            previewEndWork = nil
+        }
+        previewEndWork = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: end)
     }
 
     // MARK: - Jumps

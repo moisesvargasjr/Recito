@@ -25,7 +25,7 @@ struct ScriptLayoutKey: Equatable {
 extension ScriptReaderView {
     /// The playback spot sits at the viewport center (matches current-index).
     static let playbackLine: CGFloat = 0.5
-    /// How long a captured anchor keeps re-applying to late layout passes.
+    /// How long a captured anchor waits for current frames before expiring.
     static let anchorSettleDelay: TimeInterval = 0.4
 
     var layoutKey: ScriptLayoutKey {
@@ -61,14 +61,20 @@ extension ScriptReaderView {
     func captureAnchorForReflow() {
         cancelReturn()
         isPreviewing = false
-        if pendingAnchor == nil { pendingAnchor = lastAnchor }
+        // Frames still belong to the layout being left, so they can seed an
+        // anchor even before one was ever remembered.
+        pendingAnchor = ReflowAnchor.captured(
+            pending: pendingAnchor, last: lastAnchor, outgoing: geometry,
+            playbackOffset: vm.playbackOffset, readingLine: Self.playbackLine)
         viewportHeight = viewport.size.height
         recomputeMaxOffset()
         applyPendingAnchor()
+        if pendingAnchor != nil { scheduleAnchorExpiry() }
     }
 
     func framesChanged(_ frames: [Int: CGRect]) {
-        let reflowed = !framesAreCurrent
+        // The very first measurement is not a reflow: nothing to carry over.
+        let reflowed = measuredLayout != nil && !framesAreCurrent
         paragraphFrames = frames
         viewportHeight = viewport.size.height
         measuredLayout = layoutKey
@@ -84,22 +90,40 @@ extension ScriptReaderView {
         applyPendingAnchor()
     }
 
-    /// Map the captured anchor into the current frames.
+    /// Seed the remembered anchor so a reflow before the first frame pass
+    /// still has a place to hold.
+    func seedAnchorOnAppear() {
+        guard lastAnchor == nil,
+              let section = readingIndices.first(where: { $0 >= vm.currentIndex }) ?? readingIndices.first
+        else { return }
+        lastAnchor = ReadingAnchor(sectionIndex: section, fraction: 0)
+    }
+
+    /// Map the captured anchor into the current frames. It is applied once,
+    /// on the first pass where frames are current, then dropped, so later
+    /// callbacks never roll auto-scroll back to it.
     private func applyPendingAnchor() {
-        guard let anchor = pendingAnchor else { return }
-        scheduleAnchorClear()
-        guard framesAreCurrent,
-              let offset = geometry.offset(for: anchor, readingLine: Self.playbackLine) else { return }
+        let step = ReflowAnchor.apply(
+            pending: pendingAnchor, framesAreCurrent: framesAreCurrent,
+            geometry: geometry, readingLine: Self.playbackLine)
+        pendingAnchor = step.pending
+        if let remembered = step.remembered { lastAnchor = remembered }
+        guard let offset = step.offset else { return }
+        anchorClearWork?.cancel()
+        anchorClearWork = nil
         vm.maxOffset = geometry.maxOffset
         vm.playbackOffset = offset
         viewOffset = offset
     }
 
-    private func scheduleAnchorClear() {
+    /// Safety net, armed once per reflow (never per apply): if no frame pass
+    /// ever arrives, stop holding the anchor so tracking can resume.
+    private func scheduleAnchorExpiry() {
         anchorClearWork?.cancel()
         let work = DispatchWorkItem {
             if let anchor = pendingAnchor { lastAnchor = anchor }
             pendingAnchor = nil
+            anchorClearWork = nil
         }
         anchorClearWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.anchorSettleDelay, execute: work)

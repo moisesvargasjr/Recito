@@ -35,6 +35,8 @@ struct ScriptReaderView: View {
     @State var isPreviewing = false
     @State var dragStartOffset: CGFloat?
     @State var returnWork: DispatchWorkItem?
+    /// Ends the preview once the return animation finishes; cancellable.
+    @State var previewEndWork: DispatchWorkItem?
     /// Playback position captured before a reflow, re-applied to new frames.
     @State var pendingAnchor: ReadingAnchor?
     @State var anchorClearWork: DispatchWorkItem?
@@ -124,6 +126,7 @@ struct ScriptReaderView: View {
     private func handleAppear() {
         viewportHeight = viewport.size.height
         viewOffset = vm.playbackOffset
+        seedAnchorOnAppear()
         vm.speedMultiplier = settings.autoScrollMultiplier
     }
 
