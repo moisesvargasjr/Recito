@@ -10,6 +10,7 @@ import Foundation
 import Combine
 @testable import Recito
 
+@MainActor
 struct ModelTests {
     @Test func documentModeMetadata() {
         #expect(DocumentMode.script.label == "Script")
@@ -81,6 +82,7 @@ struct ModelTests {
     }
 }
 
+@MainActor
 struct NoOpSpeechAndEngineTests {
     @Test func noOpSpeechSourceIsUnavailable() async throws {
         let source = NoOpSpeechSource()

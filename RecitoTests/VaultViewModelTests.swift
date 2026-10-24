@@ -13,6 +13,7 @@ import Combine
 
 @MainActor
 struct VaultViewModelTests {
+    @MainActor
     private struct Fixture {
         let iso = IsolatedDefaults()
         let dir = TempDir()
