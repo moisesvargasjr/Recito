@@ -43,6 +43,7 @@ struct SheetNavRow: View {
     let title: String
     var subtitle: String? = nil
     var showDivider: Bool = false
+    var identifier: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -54,23 +55,92 @@ struct SheetNavRow: View {
                 HStack(spacing: Spacing.md) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
-                            .font(.system(size: 17))
+                            .font(.body)
                             .foregroundStyle(Theme.ink)
                         if let subtitle {
                             Text(subtitle)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundStyle(Theme.ink3)
                         }
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Theme.ink3)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
+                .frame(minHeight: Spacing.hitTarget)
+                .contentShape(Rectangle())
             }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .optionalAccessibilityIdentifier(identifier)
+    }
+}
+
+// MARK: - Detents
+
+/// Shared sheet sizing: compact height (landscape phones, short displays) only
+/// offers `.large` so controls aren't squeezed; otherwise `.medium` + `.large`,
+/// starting at `initial`. The drag indicator is always visible.
+struct AdaptiveSheetDetents: ViewModifier {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var selection: PresentationDetent
+
+    init(initial: PresentationDetent) {
+        _selection = State(initialValue: initial)
+    }
+
+    func body(content: Content) -> some View {
+        let isCompactHeight = verticalSizeClass == .compact
+        let effective = Binding<PresentationDetent>(
+            get: { isCompactHeight ? .large : selection },
+            set: { selection = $0 }
+        )
+        return content
+            .presentationDetents(isCompactHeight ? [.large] : [.medium, .large], selection: effective)
+            .presentationDragIndicator(.visible)
+    }
+}
+
+extension View {
+    func adaptiveSheetDetents(initial: PresentationDetent = .medium) -> some View {
+        modifier(AdaptiveSheetDetents(initial: initial))
+    }
+}
+
+// MARK: - Keyboard
+
+/// A trailing "Done" button above the keyboard that ends text editing.
+struct KeyboardDoneToolbar: ToolbarContent {
+    let identifier: String
+    let action: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button("Done", action: action)
+                .fontWeight(.semibold)
+                .accessibilityIdentifier(identifier)
+                .accessibilityHint("Hides the keyboard")
+        }
+    }
+}
+
+// MARK: - Accessibility
+
+extension View {
+    /// Applies an accessibility identifier only when one is given.
+    @ViewBuilder
+    func optionalAccessibilityIdentifier(_ identifier: String?) -> some View {
+        if let identifier {
+            accessibilityIdentifier(identifier)
+        } else {
+            self
+        }
     }
 }

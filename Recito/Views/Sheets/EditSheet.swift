@@ -18,6 +18,10 @@ struct EditSheet: View {
     @State private var title: String
     @State private var text: String
     @State private var mode: DocumentMode
+    @FocusState private var focusedField: Field?
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private enum Field: Hashable { case title, text }
 
     init(talk: Talk) {
         self.talk = talk
@@ -41,24 +45,39 @@ struct EditSheet: View {
                 }
                 .padding(Spacing.xl)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(AXID.Edit.root)
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg)
             .navigationTitle("Edit talk")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.fontWeight(.bold).disabled(!canSave)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier(AXID.Edit.cancel)
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .fontWeight(.bold)
+                        .disabled(!canSave)
+                        .accessibilityIdentifier(AXID.Edit.save)
+                }
+                KeyboardDoneToolbar(identifier: AXID.Edit.keyboardDone) { focusedField = nil }
             }
         }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             GroupHeaderText("Title")
             TextField("Talk title", text: $title)
-                .font(.system(size: 17))
+                .font(.body)
+                .focused($focusedField, equals: .title)
+                .submitLabel(.next)
+                .onSubmit { focusedField = .text }
+                .accessibilityIdentifier(AXID.Edit.title)
                 .padding(Spacing.md)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.group))
                 .cardShadow()
@@ -70,10 +89,15 @@ struct EditSheet: View {
             GroupHeaderText("Script")
             TextEditor(text: $text)
                 .scrollContentBackground(.hidden)
-                .font(.system(size: 16))
+                .font(.body)
+                .focused($focusedField, equals: .text)
+                .accessibilityLabel("Script text")
+                .accessibilityIdentifier(AXID.Edit.text)
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.sm)
-                .frame(minHeight: 220)
+                .frame(minHeight: LayoutMetrics.editorMinHeight(
+                    isCompactHeight: verticalSizeClass == .compact, kind: .edit
+                ))
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.group))
                 .cardShadow()
         }
@@ -86,6 +110,7 @@ struct EditSheet: View {
                 ForEach(DocumentMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier(AXID.Edit.mode)
         }
     }
 
