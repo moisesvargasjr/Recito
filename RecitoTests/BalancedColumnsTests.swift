@@ -30,4 +30,18 @@ struct BalancedColumnsTests {
         #expect(BalancedColumns.count(itemCount: 3, availableWidth: .infinity, minItemWidth: 76, spacing: 8) == 3)
         #expect(BalancedColumns.count(itemCount: 3, availableWidth: 400, minItemWidth: 0, spacing: 8) == 3)
     }
+
+    @Test(arguments: [CGFloat.greatestFiniteMagnitude, 1e30, 1e300, -1e300, .nan, -.infinity])
+    func absurdWidthsNeverTrap(_ width: CGFloat) {
+        let columns = BalancedColumns.count(itemCount: 5, availableWidth: width, minItemWidth: 76, spacing: 8)
+        #expect((1...5).contains(columns))
+    }
+
+    @Test func hugeFiniteWidthKeepsEverythingOnOneRow() {
+        #expect(BalancedColumns.count(itemCount: 5, availableWidth: 1e30, minItemWidth: 76, spacing: 8) == 5)
+    }
+
+    @Test func nonFiniteSpacingIsSafe() {
+        #expect(BalancedColumns.count(itemCount: 4, availableWidth: 400, minItemWidth: 76, spacing: .nan) == 4)
+    }
 }

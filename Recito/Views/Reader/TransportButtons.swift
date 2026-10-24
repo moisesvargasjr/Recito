@@ -78,23 +78,24 @@ struct TransportButtons: View {
 
     var body: some View {
         HStack(spacing: Spacing.xl) {
-            bigButton(.previous, size: sideSize, filled: false, action: onPrevious)
+            bigButton(.previous, size: sideSize, glyph: .title2, filled: false, action: onPrevious)
             if showsPlay {
-                bigButton(.playPause, size: playSize, filled: true, action: onTogglePlay)
+                bigButton(.playPause, size: playSize, glyph: .title, filled: true, action: onTogglePlay)
             }
-            bigButton(.next, size: sideSize, filled: false, action: onNext)
+            bigButton(.next, size: sideSize, glyph: .title2, filled: false, action: onNext)
         }
     }
 
     private func bigButton(
         _ control: TransportControl,
         size: CGFloat,
+        glyph: Font.TextStyle,
         filled: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: control.systemImage(isRunning: isRunning))
-                .font(.system(size: size * 0.4, weight: .semibold))
+                .font(.system(glyph, weight: .semibold))
                 .foregroundStyle(filled ? Theme.onAccent : Theme.ink)
                 .frame(width: max(size, Spacing.hitTarget), height: max(size, Spacing.hitTarget))
                 .background(filled ? Theme.accent : Theme.surface2, in: Circle())

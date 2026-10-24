@@ -12,8 +12,10 @@ import CoreGraphics
 enum BalancedColumns {
     static func count(itemCount: Int, availableWidth: CGFloat, minItemWidth: CGFloat, spacing: CGFloat) -> Int {
         guard itemCount > 0 else { return 1 }
-        guard availableWidth.isFinite, minItemWidth > 0 else { return itemCount }
-        let fit = Int(((availableWidth + spacing) / (minItemWidth + spacing)).rounded(.down))
+        guard availableWidth.isFinite, spacing.isFinite, minItemWidth > 0 else { return itemCount }
+        // Clamp in floating point first: Int(_:) traps on out-of-range values.
+        let ratio = ((availableWidth + spacing) / (minItemWidth + spacing)).rounded(.down)
+        let fit = Int(min(max(ratio, 1), CGFloat(itemCount)))
         let perRow = min(itemCount, max(1, fit))
         let rows = (itemCount + perRow - 1) / perRow
         return (itemCount + rows - 1) / rows
