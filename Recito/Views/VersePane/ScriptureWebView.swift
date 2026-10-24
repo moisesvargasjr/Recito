@@ -49,7 +49,7 @@ struct ScriptureWebView: UIViewRepresentable {
 
     private static func makeConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
+        configuration.websiteDataStore = ScriptureDataStore.make()
         configuration.dataDetectorTypes = []
         configuration.allowsInlineMediaPlayback = true
         configuration.defaultWebpagePreferences.preferredContentMode = .mobile
