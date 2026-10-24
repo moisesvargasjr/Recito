@@ -39,6 +39,8 @@ final class ReaderViewModel: ObservableObject {
     /// True when auto-scroll was paused because we reached a read-aloud
     /// scripture (the pace clock keeps running). Cleared on resume.
     @Published var isHoldingForScripture = false
+    /// In-app verse pane state (see +Verse).
+    @Published var verseState = VerseState.idle
 
     /// The playback position in points — the spoken/highlighted spot. Advances
     /// with auto-scroll and drives pacing. Independent of where the user is
