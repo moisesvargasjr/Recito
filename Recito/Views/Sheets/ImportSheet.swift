@@ -47,6 +47,7 @@ struct ImportSheet: View {
             .background(Theme.bg)
             .navigationTitle("Add a talk")
             .navigationBarTitleDisplayMode(.inline)
+            .pinnedNavigationBar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

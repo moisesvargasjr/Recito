@@ -4,7 +4,8 @@
 //
 //  The in-app verse pane (DisplaySettings.scriptureDestination == .inApp):
 //  a header with the citation, an "Open in JW Library" hand-off and Done,
-//  over the verse's jw.org page in a locked-down, non-persistent web view.
+//  over the verse's jw.org page in a locked-down web view whose storage is
+//  private to Recito (see ScriptureDataStore).
 //
 
 import SwiftUI

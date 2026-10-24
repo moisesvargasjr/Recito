@@ -43,6 +43,11 @@ struct ReaderPaneLayout<Primary: View, Secondary: View, Transport: View>: View {
     @ViewBuilder let secondary: () -> Secondary
     @ViewBuilder let transport: (ReaderViewport) -> Transport
 
+    /// The compact-width sheet opens tall enough to show a verse (.medium
+    /// shows almost nothing on the cover display).
+    private static var sheetDetent: PresentationDetent { .fraction(0.72) }
+    @State private var sheetSelection: PresentationDetent = Self.sheetDetent
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Theme.bg
@@ -70,8 +75,9 @@ struct ReaderPaneLayout<Primary: View, Secondary: View, Transport: View>: View {
         .animation(plan.paneAsSheet ? nil : .easeInOut(duration: 0.25), value: plan)
         .sheet(isPresented: sheetBinding) {
             secondary()
-                .presentationDetents([.medium, .large])
+                .presentationDetents([Self.sheetDetent, .large], selection: $sheetSelection)
                 .presentationDragIndicator(.visible)
+                .onDisappear { sheetSelection = Self.sheetDetent }
         }
     }
 

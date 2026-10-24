@@ -85,17 +85,14 @@ final class SheetsUITests: RecitoUITestCase {
         XCTAssertTrue(shown.contains("In Recito"), "picker should still say In Recito after relaunch, got: \(shown)")
     }
 
-    /// BUG: once the Text & Display form is scrolled, the toolbar Done button
-    /// leaves the accessibility hierarchy (cover display), so the sheet can only
-    /// be closed by scrolling back up or dragging it down.
+    /// The toolbar Done stays reachable once the Text & Display form is scrolled.
     func testDoneStaysReachableWhileScrolled() {
         launch(seed: .samples)
         library.waitForLoad()
         let sheet = library.openTextDisplay()
         XCTAssertTrue(sheet.waitForLoad())
         sheet.revealScripturePicker()
-        XCTExpectFailure("BUG: Text & Display Done disappears while the form is scrolled") {
-            XCTAssertTrue(sheet.done.exists && sheet.done.isHittable)
-        }
+        XCTAssertTrue(sheet.done.waitForExistence(timeout: 3), "Done should still exist after scrolling")
+        XCTAssertTrue(sheet.done.isHittable, "Done should be hittable after scrolling")
     }
 }

@@ -41,6 +41,7 @@ struct PacingSheet: View {
             .background(Theme.bg)
             .navigationTitle("Set your pace")
             .navigationBarTitleDisplayMode(.inline)
+            .pinnedNavigationBar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

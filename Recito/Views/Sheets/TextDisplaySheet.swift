@@ -32,6 +32,7 @@ struct TextDisplaySheet: View {
             .accessibilityIdentifier(AXID.Text.root)
             .navigationTitle("Text & Display")
             .navigationBarTitleDisplayMode(.inline)
+            .pinnedNavigationBar()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

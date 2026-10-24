@@ -51,6 +51,7 @@ struct EditSheet: View {
             .background(Theme.bg)
             .navigationTitle("Edit talk")
             .navigationBarTitleDisplayMode(.inline)
+            .pinnedNavigationBar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

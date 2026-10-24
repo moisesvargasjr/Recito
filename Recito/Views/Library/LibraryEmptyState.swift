@@ -33,9 +33,11 @@ struct LibraryEmptyState: View {
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.xxxl)
             .frame(maxWidth: .infinity)
+            // On the scrolled content, not the ScrollView: a container id on
+            // the ScrollView is swallowed by the parent's `library.root`.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(AXID.Library.emptyState)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(AXID.Library.emptyState)
     }
 
     private var actions: some View {

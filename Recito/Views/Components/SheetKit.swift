@@ -113,6 +113,22 @@ extension View {
     }
 }
 
+// MARK: - Navigation bar
+
+extension View {
+    /// Keeps the sheet's navigation bar (title, Cancel, Done) on screen while
+    /// its content scrolls. iOS 27 minimizes the bar on scroll in small
+    /// windows (the cover display), which takes Done out of reach.
+    @ViewBuilder
+    func pinnedNavigationBar() -> some View {
+        if #available(iOS 27.0, *) {
+            toolbarMinimizationBehavior(.never, for: .navigationBar)
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Keyboard
 
 /// A trailing "Done" button above the keyboard that ends text editing.

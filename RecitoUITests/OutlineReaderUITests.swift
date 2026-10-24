@@ -35,18 +35,10 @@ final class OutlineReaderUITests: RecitoUITestCase {
         XCTAssertEqual(reader.index, 1)
     }
 
-    /// BUG: on open (index 0) the outline is scrolled so rows 0-2 are above the
-    /// top edge of the screen (row 0 frame y is negative).
-    private func expectFirstRowVisibleBug() {
-        XCTExpectFailure("BUG: outline reader opens scrolled past the current (first) row") {
-            assertHittable(reader.outlineRow(0), "first outline row")
-        }
-    }
-
     func testDarkThemeScreenshot() {
         launchOutlineReader(extra: ["-theme", "dark"])
         XCTAssertEqual(reader.mode, "outline")
-        expectFirstRowVisibleBug()
+        assertHittable(reader.outlineRow(0), "first outline row")
         screenshot("dark")
     }
 }

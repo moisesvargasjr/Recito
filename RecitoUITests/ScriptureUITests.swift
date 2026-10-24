@@ -39,6 +39,7 @@ final class ScriptureUITests: RecitoUITestCase {
         let loading = app.element(AXID.VersePane.loading)
         // "Loaded": web view present and the loading indicator gone.
         waitUntil(timeout: 20) { error.exists || (web.exists && !loading.exists) }
+        dismissConsentWallIfPresent(whenLoaded: web.exists && !error.exists)
         let reached = error.exists ? "error" : (web.exists && !loading.exists ? "web-loaded" : "still-loading")
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "versePane-live"
@@ -52,6 +53,20 @@ final class ScriptureUITests: RecitoUITestCase {
         } else {
             XCTAssertEqual(reached, "web-loaded", "pane did not finish loading within 20 s")
         }
+    }
+
+    /// Test automation only (the app never touches the consent dialog): tap
+    /// jw.org's accept button, when its first-load wall is up, so the verse
+    /// behind it can be seen in the screenshot. Tolerates it being absent.
+    private func dismissConsentWallIfPresent(whenLoaded loaded: Bool) {
+        guard loaded else { return }
+        let match = NSPredicate(
+            format: "label CONTAINS[c] 'aceptar' OR label CONTAINS[c] 'accept' OR label CONTAINS[c] 'agree'"
+        )
+        let button = app.webViews.buttons.matching(match).firstMatch
+        guard button.waitForExistence(timeout: 5) else { return }
+        button.tap()
+        _ = app.webViews.buttons.matching(match).firstMatch.waitForNonExistence(timeout: 5)
     }
 
     func testJWLibraryDestinationDoesNotShowVersePane() {
