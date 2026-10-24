@@ -85,7 +85,10 @@ extension ScriptureWebView {
             }
             // A nil target frame is a new-window request; treat it as top level.
             let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
-            switch ScriptureWebPolicy.decision(for: url, isMainFrame: isMainFrame) {
+            let isUserInitiated = navigationAction.navigationType == .linkActivated
+            switch ScriptureWebPolicy.decision(
+                for: url, isMainFrame: isMainFrame, isUserInitiated: isUserInitiated
+            ) {
             case .allow:
                 decisionHandler(.allow)
             case .openExternally:
@@ -154,7 +157,7 @@ extension ScriptureWebView {
             windowFeatures: WKWindowFeatures
         ) -> WKWebView? {
             if let url = navigationAction.request.url,
-               ScriptureWebPolicy.decision(for: url, isMainFrame: true) == .allow {
+               ScriptureWebPolicy.decision(for: url, isMainFrame: true, isUserInitiated: false) == .allow {
                 webView.load(navigationAction.request)
             }
             return nil

@@ -33,7 +33,16 @@ nonisolated enum ScriptureWebPolicy {
         charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-."
     )
 
-    static func decision(for url: URL, isMainFrame: Bool) -> Decision {
+    /// `isUserInitiated` is true only for a tapped link. Redirects, meta
+    /// refresh, script `location=` and iframe top-navigation are page-initiated
+    /// and may never hand off to another app, so `.openExternally` degrades to
+    /// `.cancel` for them.
+    static func decision(for url: URL, isMainFrame: Bool, isUserInitiated: Bool) -> Decision {
+        let raw = rawDecision(for: url, isMainFrame: isMainFrame)
+        return raw == .openExternally && !isUserInitiated ? .cancel : raw
+    }
+
+    private static func rawDecision(for url: URL, isMainFrame: Bool) -> Decision {
         guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else { return .cancel }
         switch scheme {
         case secureScheme:

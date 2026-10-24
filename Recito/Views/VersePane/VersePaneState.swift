@@ -83,7 +83,7 @@ nonisolated enum VersePaneState: Equatable, Sendable {
     /// Initial state for a pane about to show `url`.
     static func initial(for url: URL?) -> VersePaneState {
         guard let url else { return .failed(.unavailable) }
-        switch ScriptureWebPolicy.decision(for: url, isMainFrame: true) {
+        switch ScriptureWebPolicy.decision(for: url, isMainFrame: true, isUserInitiated: true) {
         case .allow: return .loading
         case .openExternally, .cancel: return .failed(.blocked)
         }

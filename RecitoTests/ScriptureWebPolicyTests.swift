@@ -8,9 +8,11 @@ import Foundation
 @testable import Recito
 
 struct ScriptureWebPolicyTests {
-    private func decide(_ string: String, mainFrame: Bool = true) throws -> ScriptureWebPolicy.Decision {
+    private func decide(
+        _ string: String, mainFrame: Bool = true, userInitiated: Bool = true
+    ) throws -> ScriptureWebPolicy.Decision {
         let url = try #require(URL(string: string), "unparseable test URL \(string)")
-        return ScriptureWebPolicy.decision(for: url, isMainFrame: mainFrame)
+        return ScriptureWebPolicy.decision(for: url, isMainFrame: mainFrame, isUserInitiated: userInitiated)
     }
 
     // MARK: Allowed hosts
@@ -124,13 +126,15 @@ struct ScriptureWebPolicyTests {
         "https://.jw.org/",
         "https://www..jw.org/",
         "https://jw%2Eorg/",
+        "https://jw.org%2eevil.com/",
+        "https://www.jw.org%2eevil.com/",
         "/relative/path",
         "www.jw.org/en/",
     ])
     func malformedOrHostlessURLsAreCancelled(_ string: String) throws {
         guard let url = URL(string: string) else { return } // unparseable is equally fine
-        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: true) == .cancel)
-        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: false) == .cancel)
+        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: true, isUserInitiated: true) == .cancel)
+        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: false, isUserInitiated: true) == .cancel)
     }
 
     // MARK: Host helper
@@ -154,6 +158,47 @@ struct ScriptureWebPolicyTests {
             verseStart: 7, verseEnd: nil, displayShort: "Ps. 37:7"
         )
         let url = try #require(JWLibraryLinker().url(for: citation))
-        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: true) == .allow)
+        #expect(ScriptureWebPolicy.decision(for: url, isMainFrame: true, isUserInitiated: true) == .allow)
+    }
+
+    // MARK: User gesture (page-initiated navigations never leave the app)
+
+    @Test(arguments: [
+        "https://evil.com/",
+        "jwlibrary:///finder?bible=19037007",
+        "mailto:someone@example.com",
+        "tel:5551234",
+    ])
+    func pageInitiatedExternalNavigationIsCancelled(_ string: String) throws {
+        #expect(try decide(string, mainFrame: true, userInitiated: false) == .cancel)
+        #expect(try decide(string, mainFrame: true, userInitiated: true) == .openExternally)
+    }
+
+    @Test func pageInitiatedNavigationWithinJWStillLoads() throws {
+        #expect(try decide("https://www.jw.org/en/", userInitiated: false) == .allow)
+    }
+
+    // MARK: Spoof backslash and host agreement
+
+    @Test(arguments: [
+        #"https://jw.org\@evil.com"#,
+        #"https://jw.org\.evil.com/"#,
+        "https://jw.org.evil.com@jw.org/",
+    ])
+    func backslashAndUserinfoSpoofsNeverAllow(_ string: String) throws {
+        guard URL(string: string) != nil else { return } // unparseable is equally safe
+        if try decide(string) == .allow { Issue.record("\(string) must not be allowed") }
+        if try decide(string, mainFrame: false) == .allow { Issue.record("\(string) must not be allowed in frames") }
+    }
+
+    @Test(arguments: [
+        "https://www.jw.org/en/", "https://jw.org%2eevil.com/", "https://evil-jw.org/",
+        "https://WOL.JW.ORG./x", "https://b.jw-cdn.org/a",
+    ])
+    func urlHostAgreesWithPercentEncodedHostWhenAllowed(_ string: String) throws {
+        let url = try #require(URL(string: string))
+        guard ScriptureWebPolicy.decision(for: url, isMainFrame: true, isUserInitiated: true) == .allow else { return }
+        let encoded = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedHost)
+        #expect(url.host?.lowercased() == encoded.lowercased())
     }
 }
