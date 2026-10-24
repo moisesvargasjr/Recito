@@ -15,6 +15,7 @@ struct LibraryView: View {
     @StateObject private var model = LibraryViewModel()
     @StateObject private var vault = VaultViewModel()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.readerDependencies) private var readerDependencies
     @State private var showImport = false
     @State private var showSettings = false
     @State private var openedTalk: Talk?
@@ -60,7 +61,7 @@ struct LibraryView: View {
             EditSheet(talk: talk)
         }
         .fullScreenCover(item: $openedTalk) { talk in
-            ReaderContainerView(vm: ReaderViewModel(talk: talk))
+            ReaderContainerView(vm: ReaderViewModel(talk: talk, deps: readerDependencies))
         }
     }
 

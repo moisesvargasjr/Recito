@@ -11,13 +11,19 @@ import Foundation
 
 struct JSONTalkPersistence: TalkPersistence {
     private let fileURL: URL
-    private let writeQueue = DispatchQueue(label: "com.moisesvargas.Recito.talkstore.write")
+    /// One serial queue for every instance, so `flush()` orders after all writes.
+    private static let writeQueue = DispatchQueue(label: "com.moisesvargas.Recito.talkstore.write")
 
     init(filename: String = "talks.json") {
-        let fm = FileManager.default
-        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appendingPathComponent(filename)
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        self.init(directory: dir, filename: filename)
+    }
+
+    /// Store the library in `directory` (created if missing) — used by tests and
+    /// the UI-test environment to keep data out of Application Support.
+    init(directory: URL, filename: String = "talks.json") {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        fileURL = directory.appendingPathComponent(filename)
     }
 
     func load() -> [Talk] {
@@ -33,8 +39,13 @@ struct JSONTalkPersistence: TalkPersistence {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(talks) else { return }
         let url = fileURL
-        writeQueue.async {
+        Self.writeQueue.async {
             try? data.write(to: url, options: .atomic)
         }
+    }
+
+    /// Block until every queued write has landed on disk (for tests).
+    func flush() {
+        Self.writeQueue.sync {}
     }
 }

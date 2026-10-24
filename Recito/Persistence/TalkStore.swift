@@ -78,16 +78,16 @@ final class TalkStore: ObservableObject {
 
 extension TalkStore {
     /// Production store backed by a JSON file, seeded with samples on first run.
-    static func live() -> TalkStore {
-        let store = TalkStore(persistence: JSONTalkPersistence(), vault: VaultFolder())
-        store.seedSamplesIfFirstRun()
+    /// `defaults` holds the first-run flag (isolated suite under UI tests).
+    static func live(defaults: UserDefaults = .standard) -> TalkStore {
+        let store = TalkStore(persistence: JSONTalkPersistence(), vault: VaultFolder(defaults: defaults))
+        store.seedSamplesIfFirstRun(defaults: defaults)
         return store
     }
 
-    private static let didSeedKey = "recito.didSeedSamples"
+    static let didSeedKey = "recito.didSeedSamples"
 
-    private func seedSamplesIfFirstRun() {
-        let defaults = UserDefaults.standard
+    func seedSamplesIfFirstRun(defaults: UserDefaults = .standard) {
         guard !defaults.bool(forKey: Self.didSeedKey) else { return }
         if talks.isEmpty {
             seed(SampleTalks.all)
