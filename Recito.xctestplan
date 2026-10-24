@@ -1,0 +1,42 @@
+{
+  "configurations" : [
+    {
+      "id" : "5B2C3E7A-1D4F-4A6B-9C8E-0F1A2B3C4D5E",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : {
+      "targets" : [
+        {
+          "containerPath" : "container:Recito.xcodeproj",
+          "identifier" : "AFFE8F0D2FD52802009B2926",
+          "name" : "Recito"
+        }
+      ]
+    },
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Recito.xcodeproj",
+        "identifier" : "AFFE8F1A2FD52804009B2926",
+        "name" : "RecitoTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Recito.xcodeproj",
+        "identifier" : "AFFE8F242FD52804009B2926",
+        "name" : "RecitoUITests"
+      },
+      "defaultTestExecutionTimeAllowance" : 180
+    }
+  ],
+  "version" : 1
+}
