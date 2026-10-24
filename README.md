@@ -47,7 +47,7 @@ Recognition arrives in bursts and lags real speech by a second or two, so the di
 
 All speech processing happens on the device. There is no cloud speech API, no backend, no account, and no analytics; the microphone and speech-recognition permission strings say exactly that. The only download is the system's on-device language model, fetched once by iOS itself. Talks live in the app's local container; a followed vault folder is only ever read.
 
-Scriptures open in the JW Library app by default. That hand-off makes no network requests from Recito. Only if you set **Open scriptures in → In Recito** does Recito go online, and then only to load the selected verse's page from jw.org. That page shows in an embedded web view that keeps no cookies or history and won't leave jw.org (other links open in Safari). Recito collects nothing and sends nothing about you or your talks.
+Scriptures open in the JW Library app by default. That hand-off makes no network requests from Recito. Only if you set **Open scriptures in → In Recito** does Recito go online, and then only to load the selected verse's page from jw.org. That page shows in an embedded web view that won't leave jw.org (other links open in Safari). The pane keeps jw.org's own cookies, for example your privacy-consent choice, in Recito's private web storage on your device, so you are only asked once. Nothing from it is shared with Recito or anyone else. Recito collects nothing and sends nothing about you or your talks.
 
 ## Tech stack
 
