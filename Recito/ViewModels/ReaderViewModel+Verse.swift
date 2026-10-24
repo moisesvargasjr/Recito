@@ -23,6 +23,9 @@ struct VerseState: Equatable {
     /// True while the citation is open in an external app (JW Library); the
     /// reader offers Resume when the app becomes active again.
     var awaitingReturn: Bool = false
+    /// True once the app has actually gone to the background during that
+    /// hand-off, so a passing `.active` (permission prompt) isn't a return.
+    var leftApp: Bool = false
 
     static let idle = VerseState(citation: nil, showsResume: false, resumeAutoScroll: false)
 }
@@ -56,7 +59,7 @@ extension ReaderViewModel {
             openVerse(citation)
             return .pane
         case .jwLibrary:
-            guard let url = citation.url ?? linker.url(for: citation) else { return .unavailable }
+            guard let url = ScriptureLinkResolver.safeURL(for: citation, linker: linker) else { return .unavailable }
             let wasRunning = holdForScripture()
             verseState = VerseState(citation: nil, showsResume: false,
                                     resumeAutoScroll: wasRunning, awaitingReturn: true)
@@ -74,7 +77,26 @@ extension ReaderViewModel {
     /// The app became active again after an external scripture: stay put and
     /// offer Resume if auto-scroll was running.
     func returnedFromExternalScripture() {
+        guard verseState.awaitingReturn, verseState.leftApp else { return }
+        endExternalScripture()
+    }
+
+    /// The app went to the background; if a scripture hand-off is pending,
+    /// the next `.active` is the real return.
+    func sceneEnteredBackground() {
         guard verseState.awaitingReturn else { return }
+        var next = verseState
+        next.leftApp = true
+        verseState = next
+    }
+
+    /// `openURL` was refused, so the app never left: restore the reader now.
+    func externalScriptureNotOpened() {
+        guard verseState.awaitingReturn else { return }
+        endExternalScripture()
+    }
+
+    private func endExternalScripture() {
         verseState = verseState.resumeAutoScroll
             ? VerseState(citation: nil, showsResume: true, resumeAutoScroll: true)
             : .idle
@@ -94,6 +116,9 @@ extension ReaderViewModel {
     /// Dismiss the pane without moving the position; surface Resume.
     func closeVerse() {
         guard verseState.citation != nil else { return }
+        // Outline mode and voice-follow never restart auto-scroll, so a hold
+        // taken for this verse must not outlive the pane.
+        if mode == .outline || voiceFollowActive { isHoldingForScripture = false }
         verseState = VerseState(
             citation: nil,
             showsResume: true,
@@ -108,6 +133,9 @@ extension ReaderViewModel {
         if shouldPlay {
             play()
         } else {
+            // Nothing restarts playback (outline mode, voice-follow), so the
+            // hold would otherwise show "tap play to continue" forever.
+            isHoldingForScripture = false
             wakeChrome()
         }
     }

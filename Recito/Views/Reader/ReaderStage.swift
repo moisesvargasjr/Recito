@@ -88,7 +88,7 @@ struct ReaderStage: View {
         if let citation = vm.presentedCitation {
             VersePaneView(
                 citation: citation,
-                url: citation.url ?? JWLibraryLinker().url(for: citation),
+                url: ScriptureLinkResolver.paneURL(for: citation, linker: JWLibraryLinker()),
                 onDone: { vm.closeVerse() }
             )
         }

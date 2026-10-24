@@ -179,4 +179,33 @@ struct ReaderViewModelVerseTests {
         #expect(!h.vm.isPlaying)
         #expect(h.ticker.isRunning)
     }
+
+    // MARK: Hold is never left dangling
+
+    @Test func resumeInOutlineModeClearsAStaleScriptureHold() {
+        let h = ReaderHarness()
+        h.vm.play()
+        h.vm.currentIndex = 2 // automatic hold
+        #expect(h.vm.isHoldingForScripture)
+        h.vm.openVerse(citation(h))
+        h.vm.mode = .outline
+        h.vm.closeVerse()
+        h.vm.resumeAfterVerse()
+        #expect(!h.vm.isPlaying)
+        #expect(!h.vm.isHoldingForScripture)
+    }
+
+    @Test func resumeWithVoiceFollowActiveClearsTheHold() async {
+        let h = ReaderHarness(talk: TalkFactory.talk(
+            text: TalkFactory.voiceScript + "\n\nRead [Ps. 37:7](https://x/ps) now."))
+        h.vm.play()
+        h.vm.openVerse(citation(h)) // hold, resumeAutoScroll = true
+        await h.vm.startVoiceFollow(localeIdentifier: "en-US")
+        h.vm.isHoldingForScripture = true
+        h.vm.closeVerse()
+        h.vm.resumeAfterVerse()
+        #expect(h.vm.voiceFollowActive)
+        #expect(!h.vm.isPlaying)
+        #expect(!h.vm.isHoldingForScripture)
+    }
 }

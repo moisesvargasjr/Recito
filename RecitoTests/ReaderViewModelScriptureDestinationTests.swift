@@ -34,12 +34,21 @@ struct ReaderViewModelScriptureDestinationTests {
         #expect(h.vm.presentedCitation == bare)
     }
 
-    @Test func jwLibraryPrefersTheAuthorsURL() throws {
+    @Test func jwLibraryPrefersASafeAuthorURL() throws {
         let h = ReaderHarness()
+        let safe = try #require(URL(string: "https://www.jw.org/es/biblia/ps37"))
+        let c = try #require(h.vm.upcomingCitation).activated(url: safe)
+        let action = h.vm.openScripture(c, destination: .jwLibrary, linker: StubLinker(result: appURL))
+        #expect(action == .external(safe))
+        #expect(h.vm.presentedCitation == nil)
+    }
+
+    @Test func jwLibraryIgnoresAnUnsafeAuthorURL() throws {
+        let h = ReaderHarness()
+        // The fixture's author link points at example.com.
         let c = try #require(h.vm.upcomingCitation)
         let action = h.vm.openScripture(c, destination: .jwLibrary, linker: StubLinker(result: appURL))
-        #expect(action == .external(URL(string: "https://example.com/ps")!))
-        #expect(h.vm.presentedCitation == nil)
+        #expect(action == .external(appURL))
     }
 
     @Test func jwLibraryFallsBackToTheLinker() {
@@ -75,6 +84,7 @@ struct ReaderViewModelScriptureDestinationTests {
         let offset = h.vm.playbackOffset
         let elapsed = h.vm.elapsed
         h.ticker.fire(60)
+        h.vm.sceneEnteredBackground()
         h.vm.returnedFromExternalScripture()
         #expect(h.vm.showsResume)
         #expect(h.vm.playbackOffset == offset)
@@ -86,6 +96,7 @@ struct ReaderViewModelScriptureDestinationTests {
     @Test func returningWhenPausedShowsNoResume() {
         let h = ReaderHarness()
         _ = openExternally(h)
+        h.vm.sceneEnteredBackground()
         h.vm.returnedFromExternalScripture()
         #expect(!h.vm.showsResume)
         #expect(h.vm.verseState == .idle)
@@ -96,5 +107,33 @@ struct ReaderViewModelScriptureDestinationTests {
         h.vm.openVerse(bare)
         h.vm.returnedFromExternalScripture()
         #expect(h.vm.presentedCitation == bare)
+    }
+
+    @Test func becomingActiveBeforeEverLeavingDoesNotEndTheHandOff() {
+        let h = ReaderHarness()
+        h.vm.play()
+        _ = openExternally(h) // e.g. the "Open in JW Library?" prompt dismisses
+        h.vm.returnedFromExternalScripture()
+        #expect(!h.vm.showsResume)
+        #expect(h.vm.verseState.awaitingReturn)
+        h.vm.sceneEnteredBackground()
+        h.vm.returnedFromExternalScripture()
+        #expect(h.vm.showsResume)
+    }
+
+    @Test func backgroundingWithoutAnExternalOpenChangesNothing() {
+        let h = ReaderHarness()
+        h.vm.sceneEnteredBackground()
+        #expect(h.vm.verseState == .idle)
+    }
+
+    @Test func aRefusedHandOffRestoresTheReaderImmediately() {
+        let h = ReaderHarness()
+        h.vm.play()
+        _ = openExternally(h)
+        h.vm.externalScriptureNotOpened()
+        #expect(h.vm.showsResume)
+        h.vm.resumeAfterVerse()
+        #expect(h.vm.isPlaying)
     }
 }
