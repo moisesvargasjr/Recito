@@ -42,7 +42,17 @@ nonisolated struct LaunchConfiguration: Equatable {
     var openTalkID: String?
     var fakeSpeechWords: [String] = []
 
+    /// Release builds ignore every launch flag so test hooks can't change a
+    /// shipping app's behavior.
     static func parse(arguments: [String], environment: [String: String]) -> LaunchConfiguration {
+        #if DEBUG
+        return parseFlags(arguments: arguments, environment: environment)
+        #else
+        return LaunchConfiguration()
+        #endif
+    }
+
+    private static func parseFlags(arguments: [String], environment: [String: String]) -> LaunchConfiguration {
         var config = LaunchConfiguration()
         var explicitSpeech: SpeechMode?
         var index = 0

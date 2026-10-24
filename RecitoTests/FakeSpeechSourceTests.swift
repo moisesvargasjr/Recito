@@ -50,17 +50,30 @@ struct FakeSpeechSourceTests {
         #expect(c.words.map(\.timestamp) == [0, 0, 0])
         let spaced = Collector()
         try await start(FakeSpeechSource(script: ["a", "b"], wordInterval: 0.05), into: spaced)
-        try await Task.sleep(nanoseconds: 400_000_000)
+        try await waitUntil { spaced.words.count == 2 }
         #expect(spaced.words.map(\.timestamp) == [0.05, 0.1])
     }
 
     @Test func stopHaltsFurtherWords() async throws {
         let c = Collector()
-        let source = FakeSpeechSource(script: ["a", "b", "c"], wordInterval: 0.05)
+        let source = FakeSpeechSource(script: ["a", "b", "c", "d", "e"], wordInterval: 0.05)
         try await start(source, into: c)
+        try await waitUntil { !c.words.isEmpty }
         source.stop()
+        let deliveredAtStop = c.words.count
         try await Task.sleep(nanoseconds: 300_000_000)
-        #expect(c.words.isEmpty)
+        #expect(deliveredAtStop < 5)
+        #expect(c.words.count == deliveredAtStop)
+    }
+
+    /// Poll `condition` on the main actor until it holds or `timeout` passes, so
+    /// assertions don't depend on how fast a loaded machine runs the delivery task.
+    private func waitUntil(timeout: TimeInterval = 3, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(condition(), "timed out waiting for condition")
     }
 
     @Test func reportsListeningStatus() async throws {

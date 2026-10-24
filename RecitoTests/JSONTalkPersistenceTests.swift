@@ -45,6 +45,19 @@ struct JSONTalkPersistenceTests {
         #expect(persistence(in: dir).load().isEmpty)
     }
 
+    @Test func corruptFileIsPreservedBeforeTheNextSaveOverwritesIt() throws {
+        let dir = TempDir(); defer { dir.tearDown() }
+        let original = Data("not json".utf8)
+        try original.write(to: dir.url.appendingPathComponent("talks.json"))
+        let store = persistence(in: dir)
+        _ = store.load()
+        store.save([TalkFactory.talk(title: "New")])
+        store.flush()
+        let backup = dir.url.appendingPathComponent("talks.json.corrupt")
+        #expect(try Data(contentsOf: backup) == original)
+        #expect(store.load().map(\.title) == ["New"])
+    }
+
     @Test func createsMissingDirectory() {
         let dir = TempDir(); defer { dir.tearDown() }
         let nested = dir.url.appendingPathComponent("a/b", isDirectory: true)

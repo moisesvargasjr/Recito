@@ -125,6 +125,9 @@ extension ReaderViewModel {
     /// so a freeze during a long talk can be correlated with thermal throttling.
     private func observeThermalState() {
         logThermalState()
+        if let thermalObserver {
+            NotificationCenter.default.removeObserver(thermalObserver)
+        }
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification,
             object: nil,
