@@ -51,6 +51,19 @@ extension ReaderViewModel {
         cueShouldExpand ? upcomingCitation?.id : nil
     }
 
+    /// Where the approaching linked citation sits, for auto-open dedup: the
+    /// same verse read twice is two distinct keys.
+    var approachingScriptureKey: ScriptureAutoOpenKey? {
+        guard cueShouldExpand, let up = upcomingLinked() else { return nil }
+        return ScriptureAutoOpenKey(sectionIndex: up.index, citationID: up.citation.id)
+    }
+
+    /// Record that the scripture at `index` was already opened (automatically),
+    /// so arriving there doesn't hold the scroll a second time.
+    func markScriptureConsumed(at index: Int) {
+        consumedScriptureIndices.insert(index)
+    }
+
     /// Expand the cue as we approach the scripture — within one paragraph/point.
     var cueShouldExpand: Bool {
         guard let up = upcomingLinked() else { return false }

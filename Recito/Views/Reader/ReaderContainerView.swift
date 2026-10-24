@@ -21,8 +21,8 @@ struct ReaderContainerView: View {
     @State private var sheet: ReaderSheet?
     @State private var command: ReaderCommand?
     @State private var layoutKind: ReaderLayoutPlan.Kind = .standard
-    /// Citations already auto-opened this session (avoid reopening).
-    @State private var autoOpenedCitations: Set<String> = []
+    /// (section, citation) pairs already auto-opened this session.
+    @State private var autoOpened: Set<ScriptureAutoOpenKey> = []
 
     private static let textScaleStep = 0.08
 
@@ -31,7 +31,7 @@ struct ReaderContainerView: View {
             ReaderStage(
                 vm: vm,
                 command: command,
-                onOpenScripture: openScripture,
+                onOpenScripture: { openScripture($0) },
                 onPrevious: { transport(-1) },
                 onTogglePlay: togglePlay,
                 onNext: { transport(1) },
@@ -53,9 +53,15 @@ struct ReaderContainerView: View {
         .onChange(of: vm.mode) { _ in persist() }
         .onChange(of: vm.isPlaying) { playing in if playing { vm.dismissResume() } }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { vm.returnedFromExternalScripture() }
+            switch phase {
+            case .background: vm.sceneEnteredBackground()
+            case .active: vm.returnedFromExternalScripture()
+            default: break
+            }
         }
-        .onChange(of: vm.approachingLinkedCitationID) { autoOpen($0) }
+        .onChange(of: vm.approachingScriptureKey) { autoOpen($0) }
+        // An auto-open skipped because a sheet was up gets its turn afterwards.
+        .onChange(of: sheet) { if $0 == nil { autoOpen(vm.approachingScriptureKey) } }
     }
 
     // MARK: - Toolbar
@@ -117,24 +123,34 @@ struct ReaderContainerView: View {
 
     /// Every scripture open goes through the view model, which applies the
     /// hold and decides the destination; the view only performs the URL open.
-    private func openScripture(_ citation: ScriptureCitation) {
+    @discardableResult
+    private func openScripture(_ citation: ScriptureCitation) -> ScriptureAction {
         let action = withAnimation(.easeInOut(duration: 0.25)) {
             vm.openScripture(citation, destination: settings.scriptureDestination)
         }
-        guard case .external(let url) = action else { return }
+        guard case .external(let url) = action else { return action }
         openURL(url) { accepted in
             // The app never left, so there's no return to wait for.
-            if !accepted { vm.returnedFromExternalScripture() }
+            if !accepted { vm.externalScriptureNotOpened() }
         }
+        return action
     }
 
     /// Opt-in: open each linked scripture once as the reading approaches it.
-    private func autoOpen(_ id: String?) {
-        guard settings.autoOpenScripture, vm.mode == .script,
-              let id, !autoOpenedCitations.contains(id),
-              let citation = vm.upcomingCitation else { return }
-        autoOpenedCitations.insert(id)
-        openScripture(citation)
+    /// The decision is `ScriptureAutoOpenPolicy`; the key is remembered (and the
+    /// arrival hold skipped) only if the scripture actually opened.
+    private func autoOpen(_ approaching: ScriptureAutoOpenKey?) {
+        guard let key = ScriptureAutoOpenPolicy.keyToOpen(
+            enabled: settings.autoOpenScripture,
+            isScriptMode: vm.mode == .script,
+            approaching: approaching,
+            scriptureBusy: vm.presentedCitation != nil || vm.verseState.awaitingReturn,
+            sheetPresented: sheet != nil,
+            alreadyOpened: autoOpened
+        ), let citation = vm.upcomingCitation, citation.id == key.citationID else { return }
+        guard openScripture(citation) != .unavailable else { return }
+        autoOpened = autoOpened.union([key])
+        vm.markScriptureConsumed(at: key.sectionIndex)
     }
 
     private func adjustTextSize(_ delta: Double) {
