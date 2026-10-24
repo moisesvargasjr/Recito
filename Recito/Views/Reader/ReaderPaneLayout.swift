@@ -11,6 +11,14 @@
 //  The reader is always the first child at the same position so its scroll
 //  state survives every change of plan.
 //
+//  Known limitation: the pane is a different view in the inline regions and in
+//  the compact-width sheet, so crossing between them (rotation, fold change
+//  while a verse is open) rebuilds the web view and reloads the verse. Keeping
+//  one web view alive across a sheet presentation isn't possible with a plain
+//  `.sheet`, so the transition is made clean instead: no animation runs while
+//  the pane moves into a sheet, so the sheet never presents over a layout that
+//  is mid-animation.
+//
 //  ArrangementView(.split) (iOS 27.1) was evaluated for this: it takes only
 //  primary/secondary builders and an axis set, with no way to pin the split
 //  to the fold, fall back to a sheet in compact width, or keep a third
@@ -39,12 +47,16 @@ struct ReaderPaneLayout<Primary: View, Secondary: View, Transport: View>: View {
         ZStack(alignment: .topLeading) {
             Theme.bg
             region(plan.readerFrame) { primary($0) }
+                // The pane covers the reader in tabletop; keep VoiceOver from
+                // reading the hidden text underneath it.
+                .accessibilityHidden(coversReader)
             if let pane = plan.paneFrame {
                 region(pane) { viewport in
                     secondary()
                         .padding(viewport.insets)
                         .background(Theme.surface)
                 }
+                .accessibilityAddTraits(coversReader ? .isModal : [])
                 .transition(.opacity)
             }
             if plan.kind == .split, let pane = plan.paneFrame {
@@ -55,13 +67,16 @@ struct ReaderPaneLayout<Primary: View, Secondary: View, Transport: View>: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .animation(.easeInOut(duration: 0.25), value: plan)
+        .animation(plan.paneAsSheet ? nil : .easeInOut(duration: 0.25), value: plan)
         .sheet(isPresented: sheetBinding) {
             secondary()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
     }
+
+    /// Tabletop with an open pane: it sits exactly over the reader.
+    private var coversReader: Bool { plan.kind == .tabletop && plan.paneFrame != nil }
 
     private var sheetBinding: Binding<Bool> {
         Binding(

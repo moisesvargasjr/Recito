@@ -109,4 +109,40 @@ struct ReaderViewModelChromeTests {
         h.vm.setFollowMode(.voice)
         #expect(h.vm.chromeVisible)
     }
+
+    // MARK: Assistive technology
+
+    @Test func lockingChromeForVoiceOverNeverAutoHides() {
+        let h = ReaderHarness()
+        h.vm.setChromeLocked(true)
+        h.vm.play()
+        #expect(h.scheduler.pending.isEmpty)
+        #expect(h.vm.chromeVisible)
+    }
+
+    @Test func lockingRevealsHiddenChromeAndCancelsAPendingHide() {
+        let h = ReaderHarness()
+        h.vm.play()
+        h.scheduler.runPending()
+        #expect(!h.vm.chromeVisible)
+        h.vm.setChromeLocked(true)
+        #expect(h.vm.chromeVisible)
+        h.vm.wakeChrome()
+        #expect(h.scheduler.pending.isEmpty)
+    }
+
+    @Test func tapToggleCannotHideALockedChrome() {
+        let h = ReaderHarness()
+        h.vm.setChromeLocked(true)
+        h.vm.toggleChrome()
+        #expect(h.vm.chromeVisible)
+    }
+
+    @Test func unlockingResumesAutoHideWhilePlaying() {
+        let h = ReaderHarness()
+        h.vm.setChromeLocked(true)
+        h.vm.play()
+        h.vm.setChromeLocked(false)
+        #expect(h.scheduler.pending.count == 1)
+    }
 }

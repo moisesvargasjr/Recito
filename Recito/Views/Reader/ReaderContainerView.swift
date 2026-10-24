@@ -49,6 +49,10 @@ struct ReaderContainerView: View {
             }
         }
         .keepAwake(settings.keepAwake)
+        .onAppear { vm.setChromeLocked(UIAccessibility.isVoiceOverRunning) }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIAccessibility.voiceOverStatusDidChangeNotification)
+        ) { _ in vm.setChromeLocked(UIAccessibility.isVoiceOverRunning) }
         .onChange(of: vm.timeLimit) { _ in persist() }
         .onChange(of: vm.mode) { _ in persist() }
         .onChange(of: vm.isPlaying) { playing in if playing { vm.dismissResume() } }

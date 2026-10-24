@@ -63,6 +63,8 @@ struct ReaderStage: View {
         .onChange(of: plan.kind) { onLayoutKind($0) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AXID.Reader.root)
+        // Chrome toggles by tapping the text; give assistive users an explicit way.
+        .accessibilityAction(named: "Show controls") { vm.wakeChrome() }
         .accessibilityValue(uiTestDiagnostics ? diagnostics(plan.kind) : "")
     }
 

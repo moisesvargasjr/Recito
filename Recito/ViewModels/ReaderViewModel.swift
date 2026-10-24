@@ -35,6 +35,9 @@ final class ReaderViewModel: ObservableObject {
     }
     @Published var isPlaying = false
     @Published var chromeVisible = true
+    /// True while VoiceOver runs: chrome stays up, since hiding it relies on a
+    /// tap-only toggle that assistive users can't be expected to find.
+    var chromeLocked = false
 
     /// True when auto-scroll was paused because we reached a read-aloud
     /// scripture (the pace clock keeps running). Cleared on resume.

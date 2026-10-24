@@ -15,8 +15,22 @@ extension ReaderViewModel {
         scheduleChromeHide()
     }
 
+    /// Keep the chrome permanently visible (VoiceOver) or release it again.
+    func setChromeLocked(_ locked: Bool) {
+        guard locked != chromeLocked else { return }
+        chromeLocked = locked
+        if locked {
+            cancelChromeHide()
+            chromeVisible = true
+        } else {
+            scheduleChromeHide()
+        }
+    }
+
     func toggleChrome() {
-        if chromeVisible {
+        if chromeLocked {
+            chromeVisible = true
+        } else if chromeVisible {
             cancelChromeHide()
             chromeVisible = false
         } else {
@@ -29,7 +43,7 @@ extension ReaderViewModel {
         // Auto-hide whenever the reader is actively running — auto-scroll OR
         // voice-follow (which keeps isPlaying false). Otherwise the bar and its
         // instruction caption would stay up for the whole talk.
-        guard isPlaying || voiceFollowActive else { return }
+        guard !chromeLocked, isPlaying || voiceFollowActive else { return }
         chromeHideCancellable = deps.scheduler.schedule(after: deps.chromeHideDelay) { [weak self] in
             withAnimation(.easeOut(duration: 0.3)) { self?.chromeVisible = false }
         }
