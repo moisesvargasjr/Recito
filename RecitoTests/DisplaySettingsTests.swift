@@ -30,6 +30,22 @@ struct DisplaySettingsTests {
         #expect(!s.autoOpenScripture)
         #expect(!s.showVoiceDebug)
         #expect(s.pacingPresets == [10, 15, 30, 45, 60])
+        #expect(s.scriptureDestination == .jwLibrary)
+    }
+
+    @Test func scriptureDestinationPersistsAndToleratesUnknownValues() {
+        let iso = IsolatedDefaults()
+        defer { iso.tearDown() }
+        reload(iso).scriptureDestination = .inApp
+        #expect(reload(iso).scriptureDestination == .inApp)
+        iso.defaults.set("carrier-pigeon", forKey: "settings.scriptureDestination")
+        #expect(reload(iso).scriptureDestination == .jwLibrary)
+    }
+
+    @Test func scriptureDestinationLabels() {
+        #expect(ScriptureDestination.allCases == [.jwLibrary, .inApp])
+        #expect(ScriptureDestination.jwLibrary.label == "JW Library app")
+        #expect(ScriptureDestination.inApp.label == "In Recito")
     }
 
     @Test func everyPropertyPersistsAcrossReload() {

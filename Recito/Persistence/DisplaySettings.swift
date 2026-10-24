@@ -30,6 +30,15 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
+/// Where a tapped (or auto-opened) scripture goes: hand off to the JW Library
+/// app — the original behavior and the default — or show the jw.org verse in
+/// Recito's own pane beside the script.
+enum ScriptureDestination: String, CaseIterable, Identifiable {
+    case jwLibrary, inApp
+    var id: String { rawValue }
+    var label: String { self == .jwLibrary ? "JW Library app" : "In Recito" }
+}
+
 final class DisplaySettings: ObservableObject {
     private enum Key {
         static let typeface = "settings.typeface"
@@ -42,6 +51,7 @@ final class DisplaySettings: ObservableObject {
         static let defaultTimeLimit = "settings.defaultTimeLimit"
         static let recognitionLanguage = "settings.recognitionLanguage"
         static let autoOpenScripture = "settings.autoOpenScripture"
+        static let scriptureDestination = "settings.scriptureDestination"
         static let showVoiceDebug = "settings.showVoiceDebug"
     }
 
@@ -70,6 +80,10 @@ final class DisplaySettings: ObservableObject {
     /// Auto-open the reference app at a scripture as you approach it (off by
     /// default; otherwise the cue is glance-only and you tap to open).
     @Published var autoOpenScripture: Bool { didSet { defaults.set(autoOpenScripture, forKey: Key.autoOpenScripture) } }
+    /// Where scriptures open (JW Library hand-off by default).
+    @Published var scriptureDestination: ScriptureDestination {
+        didSet { defaults.set(scriptureDestination.rawValue, forKey: Key.scriptureDestination) }
+    }
     /// Show the voice-follow diagnostics overlay (recognized words, predictor
     /// lead, pace). Debug builds only — the toggle and overlay are compiled out
     /// of release, so this value is inert there.
@@ -90,6 +104,9 @@ final class DisplaySettings: ObservableObject {
         defaultTimeLimit = defaults.object(forKey: Key.defaultTimeLimit) as? Double ?? 30 * 60
         recognitionLanguage = defaults.string(forKey: Key.recognitionLanguage) ?? "es-ES"
         autoOpenScripture = defaults.bool(forKey: Key.autoOpenScripture)
+        scriptureDestination = ScriptureDestination(
+            rawValue: defaults.string(forKey: Key.scriptureDestination) ?? ""
+        ) ?? .jwLibrary
         showVoiceDebug = defaults.bool(forKey: Key.showVoiceDebug)
     }
 
