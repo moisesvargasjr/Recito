@@ -48,7 +48,7 @@ enum LayoutMetrics {
 
     // MARK: Library grid
 
-    static let libraryMinCard: CGFloat = 200
+    static let libraryMinCard: CGFloat = 180
     static let librarySpacing: CGFloat = Spacing.md
 
     /// Adaptive card count. Side padding is Spacing.lg. Regular width rounds

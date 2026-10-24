@@ -53,6 +53,9 @@ struct LayoutMetricsTests {
         #expect(LayoutMetrics.libraryColumnCount(width: 466, isRegular: false) == 2)
         #expect(LayoutMetrics.libraryColumnCount(width: 669, isRegular: true) == 2)
         #expect(LayoutMetrics.libraryColumnCount(width: 951, isRegular: true) == 4)
+        // Inner display in landscape beside the trailing side toolbar (measured
+        // on the iPhone Duo simulator): must still be 2 columns per half.
+        #expect(LayoutMetrics.libraryColumnCount(width: 866, isRegular: true) == 4)
         let big = LayoutMetrics.libraryColumnCount(width: 1366, isRegular: true)
         #expect(big % 2 == 0 && big >= 4)
     }
