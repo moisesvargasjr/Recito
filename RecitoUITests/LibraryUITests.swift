@@ -35,15 +35,7 @@ final class LibraryUITests: RecitoUITestCase {
         library.waitForLoad()
         library.search("zzzzqqq")
         assertHittable(library.emptyStateImport, "empty-state Import")
-        expectEmptyStateIdentifierBug()
-    }
-
-    /// BUG: LibraryEmptyState's `library.emptyState` id is swallowed by the
-    /// parent's `library.root` container, so the element is not addressable.
-    private func expectEmptyStateIdentifierBug() {
-        XCTExpectFailure("BUG: library.emptyState identifier is not exposed (overridden by library.root)") {
-            XCTAssertTrue(library.emptyState.waitForExistence(timeout: 2))
-        }
+        XCTAssertTrue(library.emptyState.waitForExistence(timeout: 2), "library.emptyState exposed")
     }
 
     func testImportButtonOpensSheet() {
@@ -107,7 +99,7 @@ final class LibraryUITests: RecitoUITestCase {
         launch(seed: .empty)
         library.waitForLoad()
         assertHittable(library.emptyStateImport, "empty-state Import")
-        expectEmptyStateIdentifierBug()
+        XCTAssertTrue(library.emptyState.waitForExistence(timeout: 2), "library.emptyState exposed")
         library.emptyStateImport.tap()
         XCTAssertTrue(ImportSheetScreen(app: app).waitForLoad())
     }
