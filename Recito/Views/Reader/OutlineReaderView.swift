@@ -20,6 +20,7 @@ struct OutlineReaderView: View {
     let onOpenScripture: (ScriptureCitation) -> Void
 
     private static let railWidth: CGFloat = 58
+    private static let topID = "outline.top"
 
     private var mainSize: CGFloat { settings.readingFontSize * 0.78 }
     private var subSize: CGFloat { settings.readingFontSize * 0.62 }
@@ -50,7 +51,7 @@ struct OutlineReaderView: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Color.clear.frame(height: viewport.insets.top + Spacing.xl)
+                    Color.clear.frame(height: viewport.insets.top + Spacing.xl).id(Self.topID)
                     ForEach(vm.outlineNodes) { node in
                         outlineRow(node).id(node.index)
                     }
@@ -62,14 +63,30 @@ struct OutlineReaderView: View {
                 // Taps between rows toggle the bars; rows handle their own taps.
                 .background(Color.clear.contentShape(Rectangle()).onTapGesture { toggleChrome() })
             }
-            .onAppear { proxy.scrollTo(vm.currentIndex, anchor: .center) }
+            .onAppear { settle(proxy) }
             .onChange(of: vm.currentIndex) { index in
-                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(index, anchor: .center) }
+                withAnimation(.easeInOut(duration: 0.3)) { reveal(index, proxy) }
             }
             .onChange(of: reflowKey) { _ in
                 // Re-center after the new layout pass (fold/rotate/text size).
-                DispatchQueue.main.async { proxy.scrollTo(vm.currentIndex, anchor: .center) }
+                settle(proxy)
             }
+        }
+    }
+
+    /// Brings the current point into place once the layout pass has run.
+    /// Scrolling before it (or centering the first point, which has nothing
+    /// above it to center against) overshoots and hides the first rows.
+    private func settle(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async { reveal(vm.currentIndex, proxy) }
+    }
+
+    /// The first point sits at the top of the list; later ones are centered.
+    private func reveal(_ index: Int, _ proxy: ScrollViewProxy) {
+        if index <= 0 {
+            proxy.scrollTo(Self.topID, anchor: .top)
+        } else {
+            proxy.scrollTo(index, anchor: .center)
         }
     }
 
