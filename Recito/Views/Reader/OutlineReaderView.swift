@@ -3,92 +3,84 @@
 //  Recito
 //
 //  Outline teleprompter: numbered points + sub-bullets, the current point
-//  enlarged with an accent-soft background. A left margin rail shows which point
-//  you're on (distinct from the time pace bar). Advance with Prev/Next or by
-//  tapping a point.
+//  enlarged with an accent-soft background. A left margin rail shows which
+//  point you're on (distinct from the time pace bar). Advance with Prev/Next
+//  or by tapping a point. After a resize, fold or text-size change the list
+//  re-centers the current point.
 //
 
 import SwiftUI
-import UIKit
 
 struct OutlineReaderView: View {
     @EnvironmentObject private var settings: DisplaySettings
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var vm: ReaderViewModel
+    let viewport: ReaderViewport
+    let showsPaceAndCue: Bool
+    let onOpenScripture: (ScriptureCitation) -> Void
 
-    @State private var showSettings = false
-    @State private var showPacing = false
-
-    private let linker: ScriptureLinker = JWLibraryLinker()
+    private static let railWidth: CGFloat = 58
 
     private var mainSize: CGFloat { settings.readingFontSize * 0.78 }
     private var subSize: CGFloat { settings.readingFontSize * 0.62 }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Theme.bg.ignoresSafeArea()
-
-                HStack(alignment: .top, spacing: 0) {
-                    marginRail
-                    outlineList(width: geo.size.width)
-                }
-
-                VStack(spacing: 0) {
-                    PaceBarView(pace: vm.pace)
-                    Spacer(minLength: 0)
-                }
-
-                ReaderChrome(
-                    vm: vm,
-                    labeledPrevNext: true,
-                    title: vm.talk.title,
-                    onClose: { dismiss() },
-                    onAa: { showSettings = true },
-                    onPrev: { advance(by: -1) },
-                    onNext: { advance(by: 1) },
-                    onSizeDown: { adjustTextSize(-0.08) },
-                    onSizeUp: { adjustTextSize(0.08) },
-                    onPaceTap: { showPacing = true },
-                    topTrailing: cueChip
-                )
+        ZStack {
+            Theme.bg
+            HStack(alignment: .top, spacing: 0) {
+                marginRail
+                outlineList
             }
-            .contentShape(Rectangle())
-            .onTapGesture { vm.toggleChrome() }
+            .padding(.leading, viewport.insets.leading)
+            .padding(.trailing, viewport.insets.trailing)
+            ReaderOverlays(vm: vm, insets: viewport.insets,
+                           showsPaceAndCue: showsPaceAndCue,
+                           onOpenScripture: onOpenScripture)
         }
-        .keepAwake(settings.keepAwake)
-        .sheet(isPresented: $showSettings) { TextDisplaySheet() }
-        .sheet(isPresented: $showPacing) { PacingSheet(timeLimit: $vm.timeLimit) }
+        .frame(width: viewport.size.width, height: viewport.size.height)
         .onAppear { vm.startClock() }
-        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - List
 
-    private func outlineList(width: CGFloat) -> some View {
-        ScrollViewReader { proxy in
+    private var outlineList: some View {
+        let available = max(0, viewport.size.width - viewport.insets.leading
+                            - viewport.insets.trailing - Self.railWidth)
+        let column = LayoutMetrics.outlineColumn(containerWidth: available, fontSize: mainSize)
+        return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Color.clear.frame(height: Spacing.xxxl + Spacing.xl) // top room for chrome title
+                    Color.clear.frame(height: viewport.insets.top + Spacing.xl)
                     ForEach(vm.outlineNodes) { node in
                         outlineRow(node).id(node.index)
                     }
-                    Color.clear.frame(height: 120) // bottom room for control cluster
+                    // Room for the cue chip / resume pill above the bottom bar.
+                    Color.clear.frame(height: viewport.insets.bottom + Spacing.xxxl + Spacing.xxl)
                 }
-                .padding(.horizontal, ScriptReaderView.sidePadding(for: width) * 0.5)
+                .padding(.horizontal, column.sidePadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Taps between rows toggle the bars; rows handle their own taps.
+                .background(Color.clear.contentShape(Rectangle()).onTapGesture { toggleChrome() })
             }
+            .onAppear { proxy.scrollTo(vm.currentIndex, anchor: .center) }
             .onChange(of: vm.currentIndex) { index in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo(index, anchor: .center)
-                }
+                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(index, anchor: .center) }
+            }
+            .onChange(of: reflowKey) { _ in
+                // Re-center after the new layout pass (fold/rotate/text size).
+                DispatchQueue.main.async { proxy.scrollTo(vm.currentIndex, anchor: .center) }
             }
         }
+    }
+
+    private var reflowKey: [CGFloat] {
+        [viewport.size.width, viewport.size.height, settings.readingFontSize]
     }
 
     private func outlineRow(_ node: OutlineNode) -> some View {
         let isCurrent = node.index == vm.currentIndex
         let size = node.level == 0 ? mainSize : subSize
+        let bold = node.level == 0 ? (isCurrent || settings.boldText) : settings.boldText
 
         return HStack(alignment: .firstTextBaseline, spacing: Spacing.lg) {
             Text(node.number ?? "—")
@@ -97,9 +89,7 @@ struct OutlineReaderView: View {
                 .frame(minWidth: 24, alignment: node.level == 0 ? .leading : .trailing)
 
             Text(node.text)
-                .font(Typography.reading(size: size,
-                                         serif: settings.typeface.isSerif,
-                                         bold: node.level == 0 ? (isCurrent || settings.boldText) : settings.boldText))
+                .font(Typography.reading(size: size, serif: settings.typeface.isSerif, bold: bold))
                 .foregroundStyle(node.level == 0 ? Theme.ink : Theme.ink2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -111,7 +101,7 @@ struct OutlineReaderView: View {
         .padding(.horizontal, isCurrent ? Spacing.lg : 0)
         .background(
             RoundedRectangle(cornerRadius: Radius.outlineRow)
-                .fill(isCurrent ? Theme.accentSoft(.light) : .clear)
+                .fill(isCurrent ? Theme.accentSoft(colorScheme) : .clear)
         )
         .overlay(alignment: .leading) {
             if isCurrent {
@@ -120,6 +110,9 @@ struct OutlineReaderView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { vm.currentIndex = node.index }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier(AXID.Reader.outlineRow(node.index))
     }
 
     // MARK: - Margin rail (which point you're on)
@@ -138,31 +131,13 @@ struct OutlineReaderView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(width: 58)
-        .padding(.vertical, Spacing.xxxl)
+        .frame(width: Self.railWidth)
+        .padding(.top, viewport.insets.top + Spacing.xxxl)
+        .padding(.bottom, viewport.insets.bottom + Spacing.xxxl)
+        .accessibilityHidden(true)
     }
 
-    // MARK: - Actions
-
-    private func advance(by delta: Int) {
-        let target = vm.currentIndex + delta
-        guard target >= 0, target < vm.outlineNodes.count else { return }
-        vm.currentIndex = target
-        vm.wakeChrome()
-    }
-
-    private func adjustTextSize(_ delta: Double) {
-        settings.textScale = min(max(settings.textScale + delta, 0), 1)
-    }
-
-    private var cueChip: AnyView? {
-        guard let citation = vm.upcomingCitation else { return nil }
-        return AnyView(
-            CueChip(citation: citation, forceExpanded: vm.cueShouldExpand) {
-                if let url = citation.url ?? linker.url(for: citation) {
-                    UIApplication.shared.open(url)
-                }
-            }
-        )
+    private func toggleChrome() {
+        withAnimation(.easeInOut(duration: 0.25)) { vm.toggleChrome() }
     }
 }

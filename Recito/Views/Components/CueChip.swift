@@ -2,58 +2,53 @@
 //  CueChip.swift
 //  Recito
 //
-//  Glance prompt for the next scripture reference. Primary tap reveals an
-//  "Open" affordance; the secondary tap deep-links the reference app — opt-in
-//  per tap, so it never steals focus from a side-by-side reference pane.
+//  Glance prompt for the next scripture reference. One tap opens it (in the
+//  verse pane or JW Library, per the user's setting). As the scripture
+//  approaches, the chip grows an "Open" affordance so it's easy to hit.
 //
 
 import SwiftUI
 
 struct CueChip: View {
     let citation: ScriptureCitation
-    /// Forces the "Open" affordance to show (e.g. as we approach the scripture).
+    /// Shows the "Open" affordance (as we approach the scripture).
     var forceExpanded: Bool = false
     let onOpen: () -> Void
 
-    @State private var manualExpanded = false
-    private var expanded: Bool { forceExpanded || manualExpanded }
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { manualExpanded.toggle() }
-            } label: {
-                HStack(spacing: 9) {
-                    Text("NEXT")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                    Text(citation.displayShort)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Theme.ink)
-                }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, 7)
-                .background(Theme.accentSoft(.light), in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.accent, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-
-            if expanded {
-                Button {
-                    onOpen()
-                    withAnimation(.easeOut(duration: 0.2)) { manualExpanded = false }
-                } label: {
-                    Label("Open", systemImage: "arrow.up.forward.app")
-                        .font(.system(size: 13, weight: .semibold))
+        Button(action: onOpen) {
+            HStack(spacing: Spacing.sm) {
+                Text("NEXT")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Theme.accent)
+                Text(citation.displayShort)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                if forceExpanded {
+                    Label("Open", systemImage: "book")
+                        .labelStyle(.titleAndIcon)
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.onAccent)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
                         .background(Theme.accent, in: Capsule())
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-                .buttonStyle(.plain)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+            .padding(.horizontal, Spacing.md)
+            .frame(minHeight: Spacing.hitTarget)
+            .background(Theme.accentSoft(colorScheme), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.accent, lineWidth: 1))
+            .contentShape(Capsule())
         }
-        .animation(.easeOut(duration: 0.2), value: expanded)
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.2), value: forceExpanded)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Next scripture, \(citation.displayShort)")
+        .accessibilityHint("Opens the verse")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(AXID.Reader.cueChip)
     }
 }

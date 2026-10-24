@@ -2,7 +2,7 @@
 //  PaceBarView.swift
 //  Recito
 //
-//  The 8pt time-pace bar flush at the top of each reader: a tertiary fill shows
+//  The 8pt time-pace bar at the top of each reader: a tertiary fill shows
 //  how far through the script you are; a 3pt accent marker shows where you
 //  should be by now. Behind = fill sits left of the marker.
 //
@@ -31,5 +31,9 @@ struct PaceBarView: View {
             }
         }
         .frame(height: height)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pace")
+        .accessibilityValue("\(pace.status.label), \(pace.percentThrough) percent through")
+        .accessibilityIdentifier(AXID.Reader.paceBar)
     }
 }
