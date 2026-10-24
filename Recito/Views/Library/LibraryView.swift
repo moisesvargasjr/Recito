@@ -2,10 +2,12 @@
 //  LibraryView.swift
 //  Recito
 //
-//  The home screen: browse / open / import saved talks in an adaptive grid that
-//  reflows for full-screen and Split View widths.
+//  The home screen: browse / open / import saved talks. Uses the system large
+//  title, search field and toolbar (which iPhone Duo places on the trailing
+//  side), with the card grid in LibraryGrid.
 //
 
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -16,53 +18,81 @@ struct LibraryView: View {
     @StateObject private var vault = VaultViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.readerDependencies) private var readerDependencies
+    @Environment(\.openTalkID) private var openTalkID
     @State private var showImport = false
     @State private var showSettings = false
     @State private var openedTalk: Talk?
     @State private var editingTalk: Talk?
+    @State private var didHandleLaunchTarget = false
 
-    private let columns = [GridItem(.adaptive(minimum: 230, maximum: 360), spacing: Spacing.xl)]
+    private static let log = Logger(subsystem: "com.moisesvargas.Recito", category: "library")
 
     var body: some View {
-        ZStack {
-            Theme.bg.ignoresSafeArea()
+        content
+            .background(Theme.bg.ignoresSafeArea())
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(AXID.Library.root)
+            .navigationTitle("Recito")
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(
+                text: $model.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search your talks"
+            )
+            .libraryToolbar(
+                showsHidden: $model.showsHidden,
+                onImport: { showImport = true },
+                onTextDisplay: { showSettings = true }
+            )
+            .modifier(LibraryPresentations(
+                vault: vault,
+                showImport: $showImport,
+                showSettings: $showSettings,
+                openedTalk: $openedTalk,
+                editingTalk: $editingTalk,
+                readerDependencies: readerDependencies
+            ))
+            .task {
+                vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
+                openLaunchTargetIfNeeded()
+            }
+            .onChange(of: scenePhase) { phase in
+                // Obsidian syncs in the background; re-read whenever we come
+                // forward so an edit made elsewhere is already here.
+                guard phase == .active else { return }
+                vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
+            }
+    }
 
-            VStack(spacing: 0) {
-                header
-                grid
-            }
+    @ViewBuilder
+    private var content: some View {
+        let talks = model.displayTalks(from: store.talks)
+        let state = LibraryContentState.resolve(
+            displayCount: talks.count, totalCount: store.talks.count, searchText: model.searchText
+        )
+        if state == .grid {
+            LibraryGrid(
+                talks: talks,
+                recentID: model.recentTalkID(from: store.talks),
+                actions: cardActions,
+                onImport: { showImport = true }
+            )
+        } else {
+            LibraryEmptyState(
+                state: state,
+                onImport: { showImport = true },
+                onShowHidden: { model.showsHidden = true }
+            )
         }
-        .sheet(isPresented: $showImport) {
-            ImportSheet(onLinkVault: { vault.pickerPresented = true }) { talk in
-                openedTalk = talk
-            }
-        }
-        .fileImporter(
-            isPresented: $vault.pickerPresented,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            guard case .success(let urls) = result, let url = urls.first else { return }
-            vault.link(to: url, store: store, defaultTimeLimit: settings.defaultTimeLimit)
-        }
-        .task {
-            vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
-        }
-        .onChange(of: scenePhase) { phase in
-            // Obsidian syncs in the background; re-read whenever we come
-            // forward so an edit made elsewhere is already here.
-            guard phase == .active else { return }
-            vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
-        }
-        .sheet(isPresented: $showSettings) {
-            TextDisplaySheet()
-        }
-        .sheet(item: $editingTalk) { talk in
-            EditSheet(talk: talk)
-        }
-        .fullScreenCover(item: $openedTalk) { talk in
-            ReaderContainerView(vm: ReaderViewModel(talk: talk, deps: readerDependencies))
-        }
+    }
+
+    private var cardActions: LibraryCardActions {
+        LibraryCardActions(
+            open: open,
+            edit: { editingTalk = $0 },
+            delete: { store.delete($0) },
+            setHidden: { hidden, talk in store.setHidden(hidden, for: talk.id) }
+        )
     }
 
     private func open(_ talk: Talk) {
@@ -70,97 +100,66 @@ struct LibraryView: View {
         openedTalk = talk
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: Spacing.md) {
-            Text("Recito")
-                .font(Typography.wordmark)
-                .foregroundStyle(Theme.ink)
-
-            searchField
-
-            AaButton(size: Spacing.hitTarget) { showSettings = true }
-
-            Button {
-                showImport = true
-            } label: {
-                Label("Import", systemImage: "plus")
-                    .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, Spacing.lg)
-                    .frame(height: Spacing.hitTarget)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: Radius.control))
-                    .foregroundStyle(Theme.onAccent)
-            }
+    /// `-openTalk <uuid>`: open that talk once, exactly as tapping its card does.
+    private func openLaunchTargetIfNeeded() {
+        guard !didHandleLaunchTarget else { return }
+        didHandleLaunchTarget = true
+        guard let openTalkID else { return }
+        guard let talk = OpenTalkTarget.talk(matching: openTalkID, in: store.talks) else {
+            Self.log.error("-openTalk \(openTalkID, privacy: .public) matches no talk in the library")
+            return
         }
-        .padding(.horizontal, Spacing.xxl)
-        .padding(.vertical, Spacing.sm)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Theme.ink2)
-            TextField("Search your talks", text: $model.searchText)
-                .textFieldStyle(.plain)
-            if !model.searchText.isEmpty {
-                Button {
-                    model.searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.ink3)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, Spacing.lg)
-        .frame(height: Spacing.hitTarget)
-        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Radius.control))
-    }
-
-    // MARK: - Grid
-
-    private var grid: some View {
-        let talks = model.displayTalks(from: store.talks)
-        let recentID = model.recentTalkID(from: store.talks)
-        return ScrollView {
-            LazyVGrid(columns: columns, spacing: Spacing.xl) {
-                ImportTileView {
-                    showImport = true
-                }
-                ForEach(talks) { talk in
-                    TalkCardView(talk: talk, isRecent: talk.id == recentID) {
-                        open(talk)
-                    }
-                    .contextMenu {
-                        if talk.source.isVault {
-                            Button {
-                                store.setHidden(!talk.isHidden, for: talk.id)
-                            } label: {
-                                talk.isHidden
-                                    ? Label("Show", systemImage: "eye")
-                                    : Label("Hide", systemImage: "eye.slash")
-                            }
-                        } else {
-                            Button { editingTalk = talk } label: {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            Button(role: .destructive) {
-                                store.delete(talk)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 36)
-            .padding(.top, Spacing.xs)
-            .padding(.bottom, Spacing.xxl)
-        }
+        open(talk)
     }
 }
 
-#Preview {
-    LibraryView()
+/// Sheets, the vault folder picker, and the full-screen reader.
+private struct LibraryPresentations: ViewModifier {
+    @EnvironmentObject private var store: TalkStore
+    @EnvironmentObject private var settings: DisplaySettings
+    @ObservedObject var vault: VaultViewModel
+    @Binding var showImport: Bool
+    @Binding var showSettings: Bool
+    @Binding var openedTalk: Talk?
+    @Binding var editingTalk: Talk?
+    let readerDependencies: ReaderDependencies
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $showImport) {
+                ImportSheet(onLinkVault: { vault.pickerPresented = true }) { talk in
+                    openedTalk = talk
+                }
+            }
+            .fileImporter(
+                isPresented: $vault.pickerPresented,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                guard case .success(let urls) = result, let url = urls.first else { return }
+                vault.link(to: url, store: store, defaultTimeLimit: settings.defaultTimeLimit)
+            }
+            .sheet(isPresented: $showSettings) {
+                TextDisplaySheet()
+            }
+            .sheet(item: $editingTalk) { talk in
+                EditSheet(talk: talk)
+            }
+            .fullScreenCover(item: $openedTalk) { talk in
+                ReaderContainerView(vm: ReaderViewModel(talk: talk, deps: readerDependencies))
+            }
+    }
+}
+
+#Preview("Library") {
+    NavigationStack { LibraryView() }
         .environmentObject(TalkStore(persistence: JSONTalkPersistence()))
+        .environmentObject(DisplaySettings())
+}
+
+#Preview("Library, accessibility size") {
+    NavigationStack { LibraryView() }
+        .environmentObject(TalkStore(persistence: JSONTalkPersistence()))
+        .environmentObject(DisplaySettings())
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

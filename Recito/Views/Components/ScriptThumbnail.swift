@@ -32,5 +32,6 @@ struct ScriptThumbnail: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Spacing.md)
         .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Radius.thumbnail))
+        .accessibilityHidden(true)
     }
 }

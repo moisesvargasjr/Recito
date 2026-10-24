@@ -2,15 +2,18 @@
 //  RootView.swift
 //  Recito
 //
-//  Top-level container. For now it hosts the Library shell; readers and sheets
-//  are presented from here as the app grows.
+//  Top-level container: a NavigationStack rooted at the Library, so the system
+//  title, search field and toolbar (side toolbar on iPhone Duo) are available.
+//  Readers and sheets are presented from the Library.
 //
 
 import SwiftUI
 
 struct RootView: View {
     var body: some View {
-        LibraryView()
+        NavigationStack {
+            LibraryView()
+        }
     }
 }
 
