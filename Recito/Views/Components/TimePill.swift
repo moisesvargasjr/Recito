@@ -16,7 +16,7 @@ struct TimePill: View {
         } icon: {
             Image(systemName: "clock")
         }
-        .font(Typography.tag)
+        .font(.footnote.weight(.semibold))
         .foregroundStyle(Theme.ink2)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)

@@ -17,7 +17,7 @@ struct ModeTag: View {
         } icon: {
             Image(systemName: mode.symbol)
         }
-        .font(Typography.tag)
+        .font(.footnote.weight(.semibold))
         .foregroundStyle(foreground)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)

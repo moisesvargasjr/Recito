@@ -16,6 +16,8 @@ struct ImportSheet: View {
     @StateObject private var model = ImportViewModel()
     @State private var mode: DocumentMode = .script
     @State private var modePickedByUser = false
+    @FocusState private var editorFocused: Bool
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     /// Ask the host to present the folder picker for vault linking.
     var onLinkVault: (() -> Void)? = nil
@@ -39,18 +41,25 @@ struct ImportSheet: View {
                 }
                 .padding(Spacing.xl)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(AXID.Import.root)
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.bg)
             .navigationTitle("Add a talk")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier(AXID.Import.cancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { add() }
                         .fontWeight(.bold)
                         .disabled(!model.canAdd)
+                        .accessibilityIdentifier(AXID.Import.create)
+                        .accessibilityHint("Adds the pasted script to your library")
                 }
+                KeyboardDoneToolbar(identifier: AXID.Import.keyboardDone) { editorFocused = false }
             }
             .fileImporter(
                 isPresented: $model.fileImporterPresented,
@@ -63,6 +72,11 @@ struct ImportSheet: View {
             }
         }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var editorMinHeight: CGFloat {
+        LayoutMetrics.editorMinHeight(isCompactHeight: verticalSizeClass == .compact, kind: .importText)
     }
 
     // MARK: - Sections
@@ -76,18 +90,22 @@ struct ImportSheet: View {
                         .foregroundStyle(Theme.ink3)
                         .padding(.horizontal, Spacing.lg)
                         .padding(.vertical, Spacing.md + 2)
+                        .accessibilityHidden(true)
                 }
                 TextEditor(text: $model.pasteText)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .frame(minHeight: 160)
+                    .frame(minHeight: editorMinHeight)
+                    .focused($editorFocused)
+                    .accessibilityLabel("Script text")
+                    .accessibilityIdentifier(AXID.Import.text)
             }
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Radius.group))
             .cardShadow()
 
             Text("Headings & bullets suit outline mode; prose suits script mode — you can switch anytime.")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(Theme.ink2)
                 .padding(.horizontal, Spacing.xs)
                 .padding(.top, Spacing.md)
@@ -108,6 +126,7 @@ struct ImportSheet: View {
                 ForEach(DocumentMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier(AXID.Import.mode)
             .onChange(of: mode) { _ in modePickedByUser = true }
         }
     }
@@ -116,10 +135,11 @@ struct ImportSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             GroupHeaderText("Or import from")
             SheetGroup {
-                SheetNavRow(title: "Markdown or text file", subtitle: ".md, .txt") {
+                SheetNavRow(title: "Markdown or text file", subtitle: ".md, .txt",
+                            identifier: AXID.Import.markdownFile) {
                     model.fileImporterPresented = true
                 }
-                SheetNavRow(title: "Files app", showDivider: true) {
+                SheetNavRow(title: "Files app", showDivider: true, identifier: AXID.Import.filesApp) {
                     model.fileImporterPresented = true
                 }
             }
@@ -135,7 +155,8 @@ struct ImportSheet: View {
                 SheetNavRow(
                     title: store.vault.isLinked ? "Change linked folder" : "Link a vault folder",
                     subtitle: store.vault.displayName.map { "Following \($0)" }
-                        ?? "e.g. an Obsidian folder of talks"
+                        ?? "e.g. an Obsidian folder of talks",
+                    identifier: AXID.Import.linkVault
                 ) {
                     dismiss()
                     onLinkVault?()
@@ -143,7 +164,7 @@ struct ImportSheet: View {
             }
 
             Text("Talks in a linked folder stay in sync — edit the note in Obsidian and the change is here next time you open Recito. Recito never writes into the folder.")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundStyle(Theme.ink2)
                 .padding(.horizontal, Spacing.xs)
                 .padding(.top, Spacing.md)
