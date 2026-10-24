@@ -25,6 +25,7 @@ struct LibraryView: View {
     @State private var editingTalk: Talk?
     @State private var didHandleLaunchTarget = false
 
+    private static let launchTargetTimeout: Duration = .seconds(5)
     private static let log = Logger(subsystem: "com.moisesvargas.Recito", category: "library")
 
     var body: some View {
@@ -55,7 +56,10 @@ struct LibraryView: View {
             .task {
                 vault.refresh(store: store, defaultTimeLimit: settings.defaultTimeLimit)
                 openLaunchTargetIfNeeded()
+                await abandonLaunchTargetAfterTimeout()
             }
+            // Talks may load after the first look; keep trying until they do.
+            .onChange(of: store.talks) { _ in openLaunchTargetIfNeeded() }
             .onChange(of: scenePhase) { phase in
                 // Obsidian syncs in the background; re-read whenever we come
                 // forward so an edit made elsewhere is already here.
@@ -101,15 +105,22 @@ struct LibraryView: View {
     }
 
     /// `-openTalk <uuid>`: open that talk once, exactly as tapping its card does.
+    /// Handled only after a match, so talks that finish loading later still get
+    /// opened (see `abandonLaunchTargetAfterTimeout`).
     private func openLaunchTargetIfNeeded() {
+        guard !didHandleLaunchTarget, let openTalkID,
+              let talk = OpenTalkTarget.talk(matching: openTalkID, in: store.talks) else { return }
+        didHandleLaunchTarget = true
+        open(talk)
+    }
+
+    /// Stop waiting for the launch target's talk after a short grace period.
+    private func abandonLaunchTargetAfterTimeout() async {
+        guard !didHandleLaunchTarget, let openTalkID else { return }
+        try? await Task.sleep(for: Self.launchTargetTimeout)
         guard !didHandleLaunchTarget else { return }
         didHandleLaunchTarget = true
-        guard let openTalkID else { return }
-        guard let talk = OpenTalkTarget.talk(matching: openTalkID, in: store.talks) else {
-            Self.log.error("-openTalk \(openTalkID, privacy: .public) matches no talk in the library")
-            return
-        }
-        open(talk)
+        Self.log.error("-openTalk \(openTalkID, privacy: .public) matches no talk in the library")
     }
 }
 
