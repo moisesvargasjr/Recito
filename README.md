@@ -97,3 +97,7 @@ xcodebuild test -project Recito.xcodeproj -scheme Recito \
 ```
 
 UI test targets are scaffolded (`RecitoUITests`).
+
+## Releasing
+
+TestFlight builds are cut by pushing a release tag: `scripts/release.sh alpha` (just me) or `scripts/release.sh beta` (friends). See [`docs/RELEASING.md`](docs/RELEASING.md).
